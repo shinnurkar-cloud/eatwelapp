@@ -16,7 +16,7 @@ import {
   ChevronRight,
   Menu,
   Bike,
-  Leaf,
+  Image,
 } from "lucide-react";
 
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_5b457f8b-21e9-4fcb-ab01-881f7858e8c3/artifacts/cjqtf2uz_Gemini_Generated_Image_yx04ezyx04ezyx04-removebg-preview%20%281%29.png";
@@ -30,6 +30,7 @@ const navItems = [
   { path: "/orders", icon: ShoppingBag, label: "Orders" },
   { path: "/customers", icon: Users, label: "Customers" },
   { path: "/subscriptions", icon: CreditCard, label: "Subscriptions" },
+  { path: "/banners", icon: Image, label: "Banners" },
   { path: "/settings", icon: Settings, label: "Settings" },
 ];
 
