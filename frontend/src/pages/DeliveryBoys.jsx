@@ -23,70 +23,70 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
 import {
-  Bike,
-  Plus,
-  Pencil,
-  Trash2,
-  Loader2,
-  Phone,
-  Mail,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-} from "lucide-react";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { Bike, Plus, Trash2, Loader2, Phone, MapPin, AlertCircle } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const initialFormData = {
   name: "",
-  email: "",
-  phone: "",
+  mobile: "",
+  login_id: "",
   password: "",
-  vehicle_type: "",
-  vehicle_number: "",
 };
 
 const DeliveryBoys = () => {
   const [deliveryBoys, setDeliveryBoys] = useState([]);
+  const [zones, setZones] = useState([]);
   const [selectedBoy, setSelectedBoy] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [zoneDialogOpen, setZoneDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(initialFormData);
+  const [selectedZones, setSelectedZones] = useState([]);
 
   useEffect(() => {
-    fetchDeliveryBoys();
+    fetchData();
   }, []);
 
-  const fetchDeliveryBoys = async () => {
+  const fetchData = async () => {
     try {
-      const response = await axios.get(`${API}/delivery-boys`);
-      setDeliveryBoys(response.data);
+      const [boysRes, zonesRes] = await Promise.all([
+        axios.get(`${API}/delivery-boys`),
+        axios.get(`${API}/zones`),
+      ]);
+      setDeliveryBoys(boysRes.data);
+      setZones(zonesRes.data);
     } catch (error) {
-      toast.error("Failed to fetch delivery boys");
+      toast.error("Failed to fetch data");
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim()) {
-      toast.error("Name, email, and phone are required");
-      return;
-    }
-    if (!selectedBoy && !formData.password) {
-      toast.error("Password is required for new delivery boys");
+    if (!formData.name.trim() || !formData.mobile.trim() || !formData.login_id.trim() || !formData.password.trim()) {
+      toast.error("All fields are required");
       return;
     }
 
     setSaving(true);
     try {
-      await axios.post(`${API}/delivery-boys`, formData);
+      await axios.post(`${API}/delivery-boys`, {
+        ...formData,
+        role: "delivery_boy"
+      });
       toast.success("Delivery boy added successfully");
-      fetchDeliveryBoys();
+      fetchData();
       handleCloseDialog();
     } catch (error) {
       const message = error.response?.data?.detail || "Failed to save";
@@ -96,34 +96,58 @@ const DeliveryBoys = () => {
     }
   };
 
+  const handleToggleStatus = async (boy) => {
+    try {
+      await axios.put(`${API}/delivery-boys/${boy.id}/status?is_active=${!boy.is_active}`);
+      toast.success(`${boy.name} ${!boy.is_active ? 'activated' : 'deactivated'}`);
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleAssignZones = async () => {
+    if (!selectedBoy) return;
+    
+    try {
+      await axios.put(`${API}/delivery-boys/${selectedBoy.id}/zones`, selectedZones);
+      toast.success("Zones assigned successfully");
+      fetchData();
+      setZoneDialogOpen(false);
+    } catch (error) {
+      toast.error("Failed to assign zones");
+    }
+  };
+
   const handleDelete = async () => {
     if (!selectedBoy) return;
 
     try {
       await axios.delete(`${API}/delivery-boys/${selectedBoy.id}`);
-      toast.success("Delivery boy removed successfully");
-      fetchDeliveryBoys();
-      setSelectedBoy(null);
+      toast.success("Delivery boy deleted");
+      fetchData();
       setDeleteDialogOpen(false);
     } catch (error) {
       toast.error("Failed to delete");
     }
   };
 
-  const handleToggleAvailability = async (boy) => {
-    try {
-      await axios.put(`${API}/delivery-boys/${boy.id}/availability?is_available=${!boy.is_available}`);
-      toast.success(`${boy.name} is now ${!boy.is_available ? "available" : "unavailable"}`);
-      fetchDeliveryBoys();
-    } catch (error) {
-      toast.error("Failed to update availability");
-    }
-  };
-
   const handleCloseDialog = () => {
     setDialogOpen(false);
-    setSelectedBoy(null);
     setFormData(initialFormData);
+  };
+
+  const openZoneDialog = (boy) => {
+    setSelectedBoy(boy);
+    setSelectedZones(boy.assigned_zones || []);
+    setZoneDialogOpen(true);
+  };
+
+  const getZoneNames = (zoneIds) => {
+    return zoneIds
+      .map((id) => zones.find((z) => z.id === id)?.name)
+      .filter(Boolean)
+      .join(", ");
   };
 
   if (loading) {
@@ -141,7 +165,7 @@ const DeliveryBoys = () => {
         <div>
           <h1 className="text-4xl font-black tracking-tight uppercase">Delivery Boys</h1>
           <p className="text-muted-foreground mt-1">
-            Manage delivery personnel
+            Manage delivery personnel and zone assignments
           </p>
         </div>
         <Button
@@ -154,48 +178,7 @@ const DeliveryBoys = () => {
         </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-card border-border">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-accent/10">
-              <Bike className="w-6 h-6 text-accent" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total</p>
-              <p className="text-2xl font-bold font-mono">{deliveryBoys.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-green-500/10">
-              <CheckCircle className="w-6 h-6 text-green-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Available</p>
-              <p className="text-2xl font-bold font-mono">
-                {deliveryBoys.filter((b) => b.is_available).length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-yellow-500/10">
-              <XCircle className="w-6 h-6 text-yellow-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Busy</p>
-              <p className="text-2xl font-bold font-mono">
-                {deliveryBoys.filter((b) => !b.is_available).length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Delivery Boys List */}
+      {/* List */}
       {deliveryBoys.length === 0 ? (
         <Card className="bg-card border-border">
           <CardContent className="flex flex-col items-center justify-center py-16">
@@ -225,59 +208,57 @@ const DeliveryBoys = () => {
                       <h3 className="font-bold">{boy.name}</h3>
                       <Badge
                         variant="outline"
-                        className={boy.is_available ? "status-delivered" : "status-pending"}
+                        className={boy.is_active ? "status-delivered" : "status-cancelled"}
                       >
-                        {boy.is_available ? "Available" : "Busy"}
+                        {boy.is_active ? "Active" : "Inactive"}
                       </Badge>
                     </div>
                   </div>
                   <Switch
-                    data-testid={`toggle-availability-${boy.id}`}
-                    checked={boy.is_available}
-                    onCheckedChange={() => handleToggleAvailability(boy)}
+                    data-testid={`toggle-status-${boy.id}`}
+                    checked={boy.is_active}
+                    onCheckedChange={() => handleToggleStatus(boy)}
                   />
                 </div>
 
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Mail className="w-4 h-4" />
-                    <span className="truncate">{boy.email}</span>
+                    <Phone className="w-4 h-4" />
+                    <span>{boy.mobile}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Phone className="w-4 h-4" />
-                    <span>{boy.phone}</span>
+                    <span className="font-mono">ID: {boy.login_id}</span>
                   </div>
-                  {boy.vehicle_type && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Bike className="w-4 h-4" />
-                      <span>
-                        {boy.vehicle_type}
-                        {boy.vehicle_number && ` - ${boy.vehicle_number}`}
-                      </span>
+                  {boy.assigned_zones?.length > 0 && (
+                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <MapPin className="w-4 h-4 mt-0.5" />
+                      <span className="text-accent">{getZoneNames(boy.assigned_zones)}</span>
                     </div>
                   )}
-                </div>
-
-                <div className="mt-4 p-3 bg-secondary/30 rounded-lg">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Total Deliveries</span>
-                    <span className="font-mono font-bold">{boy.total_deliveries}</span>
-                  </div>
                 </div>
 
                 <div className="flex gap-2 mt-4 pt-4 border-t border-border">
                   <Button
                     size="sm"
                     variant="secondary"
-                    className="flex-1 text-destructive hover:bg-destructive/10"
+                    className="flex-1"
+                    data-testid={`assign-zones-${boy.id}`}
+                    onClick={() => openZoneDialog(boy)}
+                  >
+                    <MapPin className="w-3 h-3 mr-1" />
+                    Assign Zones
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="text-destructive hover:bg-destructive/10"
                     data-testid={`delete-delivery-boy-${boy.id}`}
                     onClick={() => {
                       setSelectedBoy(boy);
                       setDeleteDialogOpen(true);
                     }}
                   >
-                    <Trash2 className="w-3 h-3 mr-1" />
-                    Remove
+                    <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
               </CardContent>
@@ -307,25 +288,24 @@ const DeliveryBoys = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
+              <Label htmlFor="mobile">Mobile Number *</Label>
               <Input
-                id="email"
-                type="email"
-                data-testid="delivery-boy-email-input"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="john@example.com"
+                id="mobile"
+                data-testid="delivery-boy-mobile-input"
+                value={formData.mobile}
+                onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                placeholder="+1 234 567 8900"
                 className="bg-input border-transparent focus:border-primary"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone *</Label>
+              <Label htmlFor="login_id">Login ID *</Label>
               <Input
-                id="phone"
-                data-testid="delivery-boy-phone-input"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+1 234 567 8900"
+                id="login_id"
+                data-testid="delivery-boy-login-input"
+                value={formData.login_id}
+                onChange={(e) => setFormData({ ...formData, login_id: e.target.value })}
+                placeholder="delivery01"
                 className="bg-input border-transparent focus:border-primary"
               />
             </div>
@@ -341,28 +321,6 @@ const DeliveryBoys = () => {
                 className="bg-input border-transparent focus:border-primary"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="vehicle">Vehicle Type</Label>
-              <Input
-                id="vehicle"
-                data-testid="delivery-boy-vehicle-input"
-                value={formData.vehicle_type}
-                onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })}
-                placeholder="e.g., Motorcycle, Bicycle, Car"
-                className="bg-input border-transparent focus:border-primary"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="vehicle_number">Vehicle Number</Label>
-              <Input
-                id="vehicle_number"
-                data-testid="delivery-boy-vehicle-number-input"
-                value={formData.vehicle_number}
-                onChange={(e) => setFormData({ ...formData, vehicle_number: e.target.value })}
-                placeholder="e.g., ABC-1234"
-                className="bg-input border-transparent focus:border-primary"
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={handleCloseDialog}>
@@ -374,7 +332,61 @@ const DeliveryBoys = () => {
               disabled={saving}
               className="font-bold"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Delivery Boy"}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Zone Assignment Dialog */}
+      <Dialog open={zoneDialogOpen} onOpenChange={setZoneDialogOpen}>
+        <DialogContent className="glass border-border max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold uppercase">
+              Assign Zones to {selectedBoy?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {zones.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">
+                No zones created yet. Create zones first.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {zones.map((zone) => (
+                  <label
+                    key={zone.id}
+                    className="flex items-center gap-3 p-3 bg-secondary/30 rounded-lg cursor-pointer hover:bg-secondary/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedZones.includes(zone.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedZones([...selectedZones, zone.id]);
+                        } else {
+                          setSelectedZones(selectedZones.filter((id) => id !== zone.id));
+                        }
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <span className="font-medium">{zone.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setZoneDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              data-testid="save-zone-assignment-btn"
+              onClick={handleAssignZones}
+              className="font-bold"
+              disabled={zones.length === 0}
+            >
+              Save Assignment
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -384,9 +396,9 @@ const DeliveryBoys = () => {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="glass border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Delivery Boy</AlertDialogTitle>
+            <AlertDialogTitle>Delete Delivery Boy</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove "{selectedBoy?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{selectedBoy?.name}"?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -396,7 +408,7 @@ const DeliveryBoys = () => {
               onClick={handleDelete}
               className="bg-destructive hover:bg-destructive/90"
             >
-              Remove
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
