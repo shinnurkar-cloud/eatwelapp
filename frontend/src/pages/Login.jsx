@@ -6,7 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { UtensilsCrossed, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+
+const LOGO_URL = "https://customer-assets.emergentagent.com/job_5b457f8b-21e9-4fcb-ab01-881f7858e8c3/artifacts/cjqtf2uz_Gemini_Generated_Image_yx04ezyx04ezyx04-removebg-preview%20%281%29.png";
+const LORD_IMAGE_URL = "https://customer-assets.emergentagent.com/job_5b457f8b-21e9-4fcb-ab01-881f7858e8c3/artifacts/dlbfx1dt_download.jpg";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -40,87 +43,132 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background grid-pattern flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8 animate-fade-in">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary glow-primary mb-4">
-            <UtensilsCrossed className="w-8 h-8 text-primary-foreground" />
+    <div className="min-h-screen bg-gradient-to-br from-orange-950 via-orange-900 to-amber-950 flex">
+      {/* Left Side - Branding & Lord Image */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center p-8 relative overflow-hidden">
+        {/* Decorative circles */}
+        <div className="absolute top-20 left-20 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl" />
+        
+        {/* Lord Sharanabasweshwara Image */}
+        <div className="relative z-10 mb-8">
+          <div className="w-64 h-64 rounded-full overflow-hidden border-4 border-orange-400/50 shadow-2xl shadow-orange-500/20">
+            <img 
+              src={LORD_IMAGE_URL} 
+              alt="Lord Sharanabasweshwara" 
+              className="w-full h-full object-cover"
+            />
           </div>
-          <h1 className="text-4xl font-black tracking-tight">ZONEBITE</h1>
-          <p className="text-muted-foreground font-mono text-sm mt-1">
-            MEAL SUBSCRIPTION ADMIN
-          </p>
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-1 rounded-full text-sm font-medium shadow-lg">
+            ॐ श्री गुरवे नमः
+          </div>
         </div>
+        
+        {/* Tagline */}
+        <div className="text-center z-10">
+          <p className="text-orange-200 text-lg font-medium">Blessed by Divine Grace</p>
+          <p className="text-orange-300/70 text-sm mt-2">Serving Healthy Meals with Love</p>
+        </div>
+      </div>
 
-        <Card className="glass border-border/50 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-2xl font-bold">Admin Login</CardTitle>
-            <CardDescription>
-              Enter your credentials to access the admin panel
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="loginId">Login ID</Label>
-                <Input
-                  id="loginId"
-                  name="loginId"
-                  data-testid="login-id-input"
-                  placeholder="admin"
-                  value={formData.loginId}
-                  onChange={handleChange}
-                  required
-                  className="bg-input border-transparent focus:border-primary"
-                />
-              </div>
+      {/* Right Side - Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          {/* Logo */}
+          <div className="text-center mb-8 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-xl shadow-orange-500/30 mb-4">
+              <img 
+                src={LOGO_URL} 
+                alt="Eatwel Logo" 
+                className="w-20 h-20 object-contain"
+              />
+            </div>
+            <h1 className="text-4xl font-black tracking-tight text-orange-100">EATWEL</h1>
+            <p className="text-orange-300/80 font-medium text-sm mt-1">
+              Stay Healthy
+            </p>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
+          <Card className="bg-black/40 backdrop-blur-xl border-orange-500/20 shadow-2xl animate-fade-in" style={{ animationDelay: "0.1s" }}>
+            <CardHeader className="space-y-1 pb-4">
+              <CardTitle className="text-2xl font-bold text-orange-100">Admin Login</CardTitle>
+              <CardDescription className="text-orange-200/60">
+                Enter your credentials to access the admin panel
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="loginId" className="text-orange-200">Login ID</Label>
                   <Input
-                    id="password"
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    data-testid="password-input"
-                    placeholder="••••••••"
-                    value={formData.password}
+                    id="loginId"
+                    name="loginId"
+                    data-testid="login-id-input"
+                    placeholder="admin"
+                    value={formData.loginId}
                     onChange={handleChange}
                     required
-                    className="bg-input border-transparent focus:border-primary pr-10"
+                    className="bg-orange-950/50 border-orange-500/30 text-orange-100 placeholder:text-orange-300/40 focus:border-orange-400 focus:ring-orange-400/20"
                   />
-                  <button
-                    type="button"
-                    data-testid="toggle-password-btn"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
-              </div>
 
-              <Button
-                type="submit"
-                data-testid="submit-btn"
-                className="w-full h-11 font-bold tracking-wide uppercase"
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Sign In"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-orange-200">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      data-testid="password-input"
+                      placeholder="••••••••"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                      className="bg-orange-950/50 border-orange-500/30 text-orange-100 placeholder:text-orange-300/40 focus:border-orange-400 focus:ring-orange-400/20 pr-10"
+                    />
+                    <button
+                      type="button"
+                      data-testid="toggle-password-btn"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-300/60 hover:text-orange-200"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
 
-        {/* Demo credentials */}
-        <p className="text-center text-xs text-muted-foreground mt-6 font-mono animate-fade-in" style={{ animationDelay: "0.2s" }}>
-          Default: admin / admin123
-        </p>
+                <Button
+                  type="submit"
+                  data-testid="submit-btn"
+                  className="w-full h-11 font-bold tracking-wide uppercase bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/30"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Sign In"
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Demo credentials */}
+          <p className="text-center text-xs text-orange-300/50 mt-6 font-mono animate-fade-in" style={{ animationDelay: "0.2s" }}>
+            Default: admin / admin123
+          </p>
+
+          {/* Mobile Lord Image */}
+          <div className="lg:hidden mt-8 flex justify-center">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-orange-400/30">
+              <img 
+                src={LORD_IMAGE_URL} 
+                alt="Lord Sharanabasweshwara" 
+                className="w-full h-full object-cover"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

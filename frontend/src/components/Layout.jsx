@@ -9,7 +9,6 @@ import {
   CalendarRange,
   MapPin,
   ShoppingBag,
-  UserCheck,
   CreditCard,
   Settings,
   LogOut,
@@ -17,7 +16,10 @@ import {
   ChevronRight,
   Menu,
   Bike,
+  Leaf,
 } from "lucide-react";
+
+const LOGO_URL = "https://customer-assets.emergentagent.com/job_5b457f8b-21e9-4fcb-ab01-881f7858e8c3/artifacts/cjqtf2uz_Gemini_Generated_Image_yx04ezyx04ezyx04-removebg-preview%20%281%29.png";
 
 const navItems = [
   { path: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -47,30 +49,30 @@ const Layout = () => {
       {/* Mobile menu button */}
       <button
         data-testid="mobile-menu-btn"
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 glass rounded-lg"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-orange-900/80 backdrop-blur-lg border border-orange-500/20 rounded-lg"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
-        <Menu className="w-5 h-5" />
+        <Menu className="w-5 h-5 text-orange-200" />
       </button>
 
       {/* Sidebar */}
       <aside
         data-testid="sidebar"
-        className={`sidebar ${collapsed ? "collapsed" : ""} ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed left-0 top-0 h-screen bg-gradient-to-b from-orange-950/95 to-black/95 backdrop-blur-xl border-r border-orange-500/20 z-40 transition-all duration-300 ${
+          collapsed ? "w-[72px]" : "w-[260px]"
+        } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-4 border-b border-border/50">
+          <div className="p-4 border-b border-orange-500/20">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                <UtensilsCrossed className="w-5 h-5 text-primary-foreground" />
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center p-1">
+                <img src={LOGO_URL} alt="Eatwel" className="w-full h-full object-contain" />
               </div>
               {!collapsed && (
                 <div className="animate-fade-in">
-                  <h1 className="text-xl font-bold tracking-tight">ZONEBITE</h1>
-                  <p className="text-xs text-muted-foreground font-mono">MEAL SUBSCRIPTIONS</p>
+                  <h1 className="text-xl font-bold tracking-tight text-orange-100">EATWEL</h1>
+                  <p className="text-xs text-orange-400 font-medium">Stay Healthy</p>
                 </div>
               )}
             </div>
@@ -85,7 +87,11 @@ const Layout = () => {
                 end={item.path === "/"}
                 data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                 className={({ isActive }) =>
-                  `sidebar-nav-item ${isActive ? "active" : ""}`
+                  `flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-orange-500/20 to-amber-500/10 text-orange-300 border-l-2 border-orange-500"
+                      : "text-orange-200/70 hover:bg-orange-500/10 hover:text-orange-200"
+                  }`
                 }
                 onClick={() => setMobileOpen(false)}
               >
@@ -98,11 +104,11 @@ const Layout = () => {
           </nav>
 
           {/* User section */}
-          <div className="p-3 border-t border-border/50">
+          <div className="p-3 border-t border-orange-500/20">
             {!collapsed && user && (
               <div className="px-4 py-2 mb-2 animate-fade-in">
-                <p className="text-sm font-medium truncate">{user.name}</p>
-                <p className="text-xs text-muted-foreground font-mono truncate uppercase">
+                <p className="text-sm font-medium text-orange-100 truncate">{user.name}</p>
+                <p className="text-xs text-orange-400 font-mono truncate uppercase">
                   {user.role}
                 </p>
               </div>
@@ -110,7 +116,7 @@ const Layout = () => {
             <Button
               data-testid="logout-btn"
               variant="ghost"
-              className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              className="w-full justify-start gap-3 text-orange-300/70 hover:text-red-400 hover:bg-red-500/10"
               onClick={handleLogout}
             >
               <LogOut className="w-5 h-5" />
@@ -121,7 +127,7 @@ const Layout = () => {
           {/* Collapse button */}
           <button
             data-testid="collapse-sidebar-btn"
-            className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-card border border-border rounded-full items-center justify-center hover:bg-secondary"
+            className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-orange-900 border border-orange-500/30 rounded-full items-center justify-center hover:bg-orange-800 text-orange-300"
             onClick={() => setCollapsed(!collapsed)}
           >
             {collapsed ? (
