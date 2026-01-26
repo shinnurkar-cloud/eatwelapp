@@ -64,11 +64,8 @@ const Login = () => {
           </div>
         </div>
         
-        {/* Tagline */}
-        <div className="text-center z-10">
-          <p className="text-orange-200 text-lg font-medium">Blessed by Divine Grace</p>
-          <p className="text-orange-300/70 text-sm mt-2">Serving Healthy Meals with Love</p>
-        </div>
+        {/* Spacer */}
+        <div className="h-4"></div>
       </div>
 
       {/* Right Side - Login Form */}
