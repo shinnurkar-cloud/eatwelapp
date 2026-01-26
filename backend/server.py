@@ -1009,11 +1009,230 @@ async def get_cloudinary_signature(
 
 @api_router.get("/")
 async def root():
-    return {"message": "ZoneBite Subscription API is running", "version": "2.0.0"}
+    return {"message": "EATWEL Subscription API is running", "version": "2.1.0"}
 
 @api_router.get("/health")
 async def health():
     return {"status": "healthy"}
+
+# ===================== BANNER MANAGEMENT =====================
+
+class BannerCreate(BaseModel):
+    title: str
+    image_url: str
+    link_url: Optional[str] = None
+    is_active: bool = True
+    order: int = 0
+
+class BannerResponse(BannerCreate):
+    id: str
+    created_at: str
+
+@api_router.post("/banners", response_model=BannerResponse)
+async def create_banner(banner: BannerCreate, admin: dict = Depends(require_admin)):
+    banner_id = str(uuid.uuid4())
+    banner_doc = {
+        "id": banner_id,
+        "title": banner.title,
+        "image_url": banner.image_url,
+        "link_url": banner.link_url,
+        "is_active": banner.is_active,
+        "order": banner.order,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.banners.insert_one(banner_doc)
+    return BannerResponse(**banner.model_dump(), id=banner_id, created_at=banner_doc["created_at"])
+
+@api_router.get("/banners", response_model=List[BannerResponse])
+async def get_banners(active_only: bool = False):
+    query = {"is_active": True} if active_only else {}
+    banners = await db.banners.find(query, {"_id": 0}).sort("order", 1).to_list(50)
+    return [BannerResponse(**b) for b in banners]
+
+@api_router.put("/banners/{banner_id}", response_model=BannerResponse)
+async def update_banner(banner_id: str, banner: BannerCreate, admin: dict = Depends(require_admin)):
+    result = await db.banners.find_one_and_update(
+        {"id": banner_id},
+        {"$set": banner.model_dump()},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    return BannerResponse(**{k: v for k, v in result.items() if k != "_id"})
+
+@api_router.delete("/banners/{banner_id}")
+async def delete_banner(banner_id: str, admin: dict = Depends(require_admin)):
+    result = await db.banners.delete_one({"id": banner_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    return {"message": "Banner deleted"}
+
+# ===================== CUSTOMER APP APIs =====================
+
+class CustomerLogin(BaseModel):
+    customer_id: str
+    password: str
+
+class CustomerProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    mobile: Optional[str] = None
+    address: Optional[str] = None
+
+class CustomerProfileResponse(BaseModel):
+    id: str
+    customer_id: str
+    name: str
+    mobile: str
+    address: str
+    zone_id: Optional[str] = None
+    zone_name: Optional[str] = None
+    is_active: bool
+    created_at: str
+    active_subscription: Optional[dict] = None
+
+@api_router.post("/customer/login")
+async def customer_login(credentials: CustomerLogin):
+    """Customer login with Customer ID and Password"""
+    customer = await db.customers.find_one({"customer_id": credentials.customer_id}, {"_id": 0})
+    if not customer or not verify_password(credentials.password, customer.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid Customer ID or Password")
+    
+    if not customer.get("is_active", True):
+        raise HTTPException(status_code=401, detail="Account is deactivated")
+    
+    token = create_token(customer["id"], credentials.customer_id, "customer")
+    
+    # Get zone name
+    zone_name = None
+    if customer.get("zone_id"):
+        zone = await db.zones.find_one({"id": customer["zone_id"]}, {"_id": 0})
+        zone_name = zone["name"] if zone else None
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "customer": {
+            "id": customer["id"],
+            "customer_id": customer["customer_id"],
+            "name": customer["name"],
+            "mobile": customer["mobile"],
+            "address": customer["address"],
+            "zone_id": customer.get("zone_id"),
+            "zone_name": zone_name,
+            "is_active": customer.get("is_active", True),
+            "created_at": customer["created_at"]
+        }
+    }
+
+@api_router.get("/customer/profile", response_model=CustomerProfileResponse)
+async def get_customer_profile(current_user: dict = Depends(get_current_user)):
+    """Get customer profile with active subscription"""
+    if current_user.get("role") not in ["customer", "admin"]:
+        # For customers, fetch from customers collection
+        pass
+    
+    customer = await db.customers.find_one({"id": current_user.get("id")}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Get zone name
+    zone_name = None
+    if customer.get("zone_id"):
+        zone = await db.zones.find_one({"id": customer["zone_id"]}, {"_id": 0})
+        zone_name = zone["name"] if zone else None
+    
+    # Get active subscription
+    active_sub = await db.subscriptions.find_one({
+        "customer_id": customer["id"],
+        "is_active": True,
+        "end_date": {"$gte": datetime.now(timezone.utc).isoformat()}
+    }, {"_id": 0})
+    
+    subscription_data = None
+    if active_sub:
+        plan = await db.plans.find_one({"id": active_sub["plan_id"]}, {"_id": 0})
+        combo = None
+        if plan:
+            combo = await db.combos.find_one({"id": plan["combo_id"]}, {"_id": 0})
+        
+        subscription_data = {
+            "id": active_sub["id"],
+            "plan_name": plan["name"] if plan else None,
+            "combo_name": combo["name"] if combo else None,
+            "start_date": active_sub["start_date"],
+            "end_date": active_sub["end_date"],
+            "is_paused": active_sub.get("is_paused", False)
+        }
+    
+    return CustomerProfileResponse(
+        id=customer["id"],
+        customer_id=customer["customer_id"],
+        name=customer["name"],
+        mobile=customer["mobile"],
+        address=customer["address"],
+        zone_id=customer.get("zone_id"),
+        zone_name=zone_name,
+        is_active=customer.get("is_active", True),
+        created_at=customer["created_at"],
+        active_subscription=subscription_data
+    )
+
+@api_router.put("/customer/profile", response_model=CustomerProfileResponse)
+async def update_customer_profile(update: CustomerProfileUpdate, current_user: dict = Depends(get_current_user)):
+    """Update customer profile"""
+    update_doc = {}
+    if update.name:
+        update_doc["name"] = update.name
+    if update.mobile:
+        update_doc["mobile"] = update.mobile
+    if update.address:
+        update_doc["address"] = update.address
+    
+    if not update_doc:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    result = await db.customers.find_one_and_update(
+        {"id": current_user.get("id")},
+        {"$set": update_doc},
+        return_document=True
+    )
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    return await get_customer_profile(current_user)
+
+@api_router.get("/customer/orders")
+async def get_customer_orders(current_user: dict = Depends(get_current_user)):
+    """Get customer's orders"""
+    orders = await db.orders.find(
+        {"customer_id": current_user.get("id")},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    return orders
+
+@api_router.get("/customer/plans")
+async def get_available_plans():
+    """Get all available subscription plans for customers"""
+    plans = await db.plans.find({"is_active": True}, {"_id": 0}).to_list(100)
+    
+    result = []
+    for plan in plans:
+        combo = await db.combos.find_one({"id": plan["combo_id"]}, {"_id": 0})
+        plan["combo_name"] = combo["name"] if combo else None
+        plan["combo_dishes"] = combo["dishes"] if combo else []
+        result.append(plan)
+    
+    return result
+
+@api_router.get("/customer/settings")
+async def get_customer_app_settings():
+    """Get app settings for customer (help number)"""
+    settings = await db.settings.find_one({"type": "app_settings"}, {"_id": 0})
+    return {
+        "help_number": settings.get("help_number", "") if settings else ""
+    }
 
 # Include the router in the main app
 app.include_router(api_router)
