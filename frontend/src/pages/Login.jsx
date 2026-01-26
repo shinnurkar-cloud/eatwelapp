@@ -43,7 +43,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-950 via-orange-900 to-amber-950 flex">
+    <div className="min-h-screen bg-orange-500 flex">
       {/* Left Side - Branding & Lord Image */}
       <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center p-8 relative overflow-hidden">
         {/* Decorative circles */}
@@ -73,7 +73,7 @@ const Login = () => {
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-8 animate-fade-in">
-            <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-xl shadow-orange-500/30 mb-4">
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-white shadow-xl shadow-black/20 mb-4">
               <img 
                 src={LOGO_URL} 
                 alt="Eatwel Logo" 
