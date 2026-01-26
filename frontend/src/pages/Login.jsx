@@ -44,22 +44,22 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-orange-500 flex">
-      {/* Left Side - Branding & Lord Image */}
+      {/* Left Side - Lord Image */}
       <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center p-8 relative overflow-hidden">
         {/* Decorative circles */}
-        <div className="absolute top-20 left-20 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-20 left-20 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-amber-400/10 rounded-full blur-3xl" />
         
         {/* Lord Sharanabasweshwara Image */}
         <div className="relative z-10 mb-8">
-          <div className="w-64 h-64 rounded-full overflow-hidden border-4 border-orange-400/50 shadow-2xl shadow-orange-500/20">
+          <div className="w-64 h-64 rounded-full overflow-hidden border-4 border-white/50 shadow-2xl shadow-black/20">
             <img 
               src={LORD_IMAGE_URL} 
               alt="Lord Sharanabasweshwara" 
               className="w-full h-full object-cover"
             />
           </div>
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-1 rounded-full text-sm font-medium shadow-lg">
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white text-orange-600 px-4 py-1 rounded-full text-sm font-medium shadow-lg">
             ॐ श्री गुरवे नमः
           </div>
         </div>
@@ -151,7 +151,7 @@ const Login = () => {
           </Card>
 
           {/* Demo credentials */}
-          <p className="text-center text-xs text-orange-300/50 mt-6 font-mono animate-fade-in" style={{ animationDelay: "0.2s" }}>
+          <p className="text-center text-xs text-white/70 mt-6 font-mono animate-fade-in" style={{ animationDelay: "0.2s" }}>
             Default: admin / admin123
           </p>
 
