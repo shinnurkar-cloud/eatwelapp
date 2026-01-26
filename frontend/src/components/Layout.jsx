@@ -4,26 +4,31 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
-  MapPin,
-  Store,
-  UtensilsCrossed,
-  ShoppingBag,
-  Bike,
   Users,
+  UtensilsCrossed,
+  CalendarRange,
+  MapPin,
+  ShoppingBag,
+  UserCheck,
+  CreditCard,
+  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
   Menu,
+  Bike,
 } from "lucide-react";
 
 const navItems = [
   { path: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { path: "/zones", icon: MapPin, label: "Delivery Zones" },
-  { path: "/restaurants", icon: Store, label: "Restaurants" },
-  { path: "/menu", icon: UtensilsCrossed, label: "Menu Items" },
-  { path: "/orders", icon: ShoppingBag, label: "Orders" },
   { path: "/delivery-boys", icon: Bike, label: "Delivery Boys" },
+  { path: "/combos", icon: UtensilsCrossed, label: "Combos" },
+  { path: "/plans", icon: CalendarRange, label: "Plans" },
+  { path: "/zones", icon: MapPin, label: "Zones" },
+  { path: "/orders", icon: ShoppingBag, label: "Orders" },
   { path: "/customers", icon: Users, label: "Customers" },
+  { path: "/subscriptions", icon: CreditCard, label: "Subscriptions" },
+  { path: "/settings", icon: Settings, label: "Settings" },
 ];
 
 const Layout = () => {
@@ -60,12 +65,12 @@ const Layout = () => {
           <div className="p-4 border-b border-border/50">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-primary-foreground" />
+                <UtensilsCrossed className="w-5 h-5 text-primary-foreground" />
               </div>
               {!collapsed && (
                 <div className="animate-fade-in">
                   <h1 className="text-xl font-bold tracking-tight">ZONEBITE</h1>
-                  <p className="text-xs text-muted-foreground font-mono">ADMIN PANEL</p>
+                  <p className="text-xs text-muted-foreground font-mono">MEAL SUBSCRIPTIONS</p>
                 </div>
               )}
             </div>
@@ -97,8 +102,8 @@ const Layout = () => {
             {!collapsed && user && (
               <div className="px-4 py-2 mb-2 animate-fade-in">
                 <p className="text-sm font-medium truncate">{user.name}</p>
-                <p className="text-xs text-muted-foreground font-mono truncate">
-                  {user.email}
+                <p className="text-xs text-muted-foreground font-mono truncate uppercase">
+                  {user.role}
                 </p>
               </div>
             )}

@@ -3,12 +3,14 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
-import DeliveryZones from "@/pages/DeliveryZones";
-import Restaurants from "@/pages/Restaurants";
-import MenuItems from "@/pages/MenuItems";
-import Orders from "@/pages/Orders";
 import DeliveryBoys from "@/pages/DeliveryBoys";
+import Combos from "@/pages/Combos";
+import Plans from "@/pages/Plans";
+import Zones from "@/pages/Zones";
+import Orders from "@/pages/Orders";
 import Customers from "@/pages/Customers";
+import Subscriptions from "@/pages/Subscriptions";
+import Settings from "@/pages/Settings";
 import Layout from "@/components/Layout";
 import "@/App.css";
 
@@ -43,12 +45,14 @@ function AppRoutes() {
         }
       >
         <Route index element={<Dashboard />} />
-        <Route path="zones" element={<DeliveryZones />} />
-        <Route path="restaurants" element={<Restaurants />} />
-        <Route path="menu" element={<MenuItems />} />
-        <Route path="orders" element={<Orders />} />
         <Route path="delivery-boys" element={<DeliveryBoys />} />
+        <Route path="combos" element={<Combos />} />
+        <Route path="plans" element={<Plans />} />
+        <Route path="zones" element={<Zones />} />
+        <Route path="orders" element={<Orders />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="subscriptions" element={<Subscriptions />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
