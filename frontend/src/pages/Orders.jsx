@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -22,104 +23,203 @@ import { toast } from "sonner";
 import {
   ShoppingBag,
   Loader2,
-  Clock,
+  Coffee,
+  Sun,
+  Moon,
   MapPin,
   Phone,
+  User,
+  Clock,
+  CheckCircle,
+  Package,
+  Truck,
   AlertCircle,
-  ChevronRight,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const statusConfig = {
-  pending: { label: "Pending", className: "status-pending", next: "confirmed" },
-  confirmed: { label: "Confirmed", className: "status-confirmed", next: "preparing" },
-  preparing: { label: "Preparing", className: "status-preparing", next: "out_for_delivery" },
-  out_for_delivery: { label: "Out for Delivery", className: "status-out_for_delivery", next: "delivered" },
-  delivered: { label: "Delivered", className: "status-delivered", next: null },
-  cancelled: { label: "Cancelled", className: "status-cancelled", next: null },
+  pending: { label: "Pending", icon: Clock, color: "yellow" },
+  packed: { label: "Packed", icon: Package, color: "blue" },
+  out_for_delivery: { label: "Out for Delivery", icon: Truck, color: "orange" },
+  delivered: { label: "Delivered", icon: CheckCircle, color: "green" },
 };
 
 const StatusBadge = ({ status }) => {
   const config = statusConfig[status] || statusConfig.pending;
+  const Icon = config.icon;
+  
   return (
-    <Badge variant="outline" className={`${config.className} font-mono text-xs uppercase`}>
+    <Badge variant="outline" className={`status-${status} font-mono text-xs uppercase flex items-center gap-1`}>
+      <Icon className="w-3 h-3" />
       {config.label}
     </Badge>
+  );
+};
+
+const OrderCard = ({ order, onStatusUpdate, deliveryBoys }) => {
+  const [updating, setUpdating] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState(order.status);
+  const [selectedBoy, setSelectedBoy] = useState(order.delivery_boy_id || "");
+
+  const handleUpdate = async () => {
+    setUpdating(true);
+    try {
+      await onStatusUpdate(order.id, selectedStatus, selectedBoy);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <Card className="bg-card border-border hover:border-primary/50 transition-colors duration-300">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <StatusBadge status={order.status} />
+              <span className="font-mono text-xs text-muted-foreground">
+                #{order.id.slice(0, 8)}
+              </span>
+            </div>
+            
+            <div className="mt-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-muted-foreground" />
+                <span className="font-medium">{order.customer_name}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Phone className="w-3 h-3" />
+                <span>{order.customer_mobile}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="w-3 h-3" />
+                <span className="truncate">{order.customer_address}</span>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <Badge variant="secondary">{order.combo_name}</Badge>
+              {order.zone_name && (
+                <Badge variant="outline" className="text-accent border-accent/30">
+                  {order.zone_name}
+                </Badge>
+              )}
+            </div>
+
+            {order.delivery_boy_name && (
+              <p className="text-sm text-accent mt-2">
+                Delivery: {order.delivery_boy_name}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {order.status !== "delivered" && (
+          <div className="mt-4 pt-4 border-t border-border space-y-3">
+            <div className="flex gap-2">
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger className="bg-input flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="packed">Packed</SelectItem>
+                  <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {selectedStatus === "out_for_delivery" && !order.delivery_boy_id && (
+                <Select value={selectedBoy} onValueChange={setSelectedBoy}>
+                  <SelectTrigger className="bg-input flex-1">
+                    <SelectValue placeholder="Assign delivery boy" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {deliveryBoys.map((boy) => (
+                      <SelectItem key={boy.id} value={boy.id}>
+                        {boy.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            
+            <Button
+              onClick={handleUpdate}
+              disabled={updating || selectedStatus === order.status}
+              className="w-full"
+              size="sm"
+            >
+              {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Update Status"}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [deliveryBoys, setDeliveryBoys] = useState([]);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [zones, setZones] = useState([]);
+  const [zoneSummary, setZoneSummary] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  const [mealType, setMealType] = useState("breakfast");
+  const [filterZone, setFilterZone] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [selectedDeliveryBoy, setSelectedDeliveryBoy] = useState("");
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [mealType]);
 
   const fetchData = async () => {
     try {
-      const [ordersRes, boysRes] = await Promise.all([
-        axios.get(`${API}/orders`),
-        axios.get(`${API}/delivery-boys?available_only=true`),
+      const [ordersRes, boysRes, zonesRes, summaryRes] = await Promise.all([
+        axios.get(`${API}/orders?meal_type=${mealType}`),
+        axios.get(`${API}/delivery-boys`),
+        axios.get(`${API}/zones`),
+        axios.get(`${API}/orders/zone-summary?meal_type=${mealType}`),
       ]);
       setOrders(ordersRes.data);
-      setDeliveryBoys(boysRes.data);
+      setDeliveryBoys(boysRes.data.filter(b => b.is_active));
+      setZones(zonesRes.data);
+      setZoneSummary(summaryRes.data);
     } catch (error) {
-      toast.error("Failed to fetch orders");
+      console.error("Error fetching orders:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleStatusUpdate = async (orderId, status, deliveryBoyId) => {
+    try {
+      await axios.put(`${API}/orders/${orderId}/status`, {
+        status,
+        delivery_boy_id: deliveryBoyId || null
+      });
+      toast.success("Order updated");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to update order");
+    }
+  };
+
   const filteredOrders = orders.filter((order) => {
-    if (filterStatus === "all") return true;
-    return order.status === filterStatus;
+    if (filterZone !== "all" && order.zone_id !== filterZone) return false;
+    if (filterStatus !== "all" && order.status !== filterStatus) return false;
+    return true;
   });
 
-  const handleUpdateStatus = async (order, newStatus) => {
-    setUpdating(true);
-    try {
-      const updateData = { status: newStatus };
-      if (newStatus === "out_for_delivery" && selectedDeliveryBoy) {
-        updateData.delivery_boy_id = selectedDeliveryBoy;
-      }
-
-      await axios.put(`${API}/orders/${order.id}/status`, updateData);
-      toast.success(`Order status updated to ${statusConfig[newStatus].label}`);
-      fetchData();
-      setDialogOpen(false);
-      setSelectedDeliveryBoy("");
-    } catch (error) {
-      toast.error("Failed to update order status");
-    } finally {
-      setUpdating(false);
+  const getMealIcon = (type) => {
+    switch (type) {
+      case "breakfast": return Coffee;
+      case "lunch": return Sun;
+      case "dinner": return Moon;
+      default: return Coffee;
     }
-  };
-
-  const handleCancelOrder = async (order) => {
-    setUpdating(true);
-    try {
-      await axios.put(`${API}/orders/${order.id}/status`, { status: "cancelled" });
-      toast.success("Order cancelled");
-      fetchData();
-      setDialogOpen(false);
-    } catch (error) {
-      toast.error("Failed to cancel order");
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const viewOrderDetails = (order) => {
-    setSelectedOrder(order);
-    setDialogOpen(true);
   };
 
   if (loading) {
@@ -130,6 +230,8 @@ const Orders = () => {
     );
   }
 
+  const MealIcon = getMealIcon(mealType);
+
   return (
     <div data-testid="orders-page" className="space-y-6">
       {/* Header */}
@@ -137,242 +239,125 @@ const Orders = () => {
         <div>
           <h1 className="text-4xl font-black tracking-tight uppercase">Orders</h1>
           <p className="text-muted-foreground mt-1">
-            Manage and track all orders
+            Today's meal orders by type
           </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger data-testid="filter-status" className="w-[180px] bg-input">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Orders</SelectItem>
-              {Object.entries(statusConfig).map(([key, config]) => (
-                <SelectItem key={key} value={key}>
-                  {config.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
-      {/* Orders List */}
+      {/* Meal Type Tabs */}
+      <Tabs value={mealType} onValueChange={setMealType} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsTrigger value="breakfast" data-testid="tab-breakfast" className="gap-2">
+            <Coffee className="w-4 h-4" />
+            Breakfast
+          </TabsTrigger>
+          <TabsTrigger value="lunch" data-testid="tab-lunch" className="gap-2">
+            <Sun className="w-4 h-4" />
+            Lunch
+          </TabsTrigger>
+          <TabsTrigger value="dinner" data-testid="tab-dinner" className="gap-2">
+            <Moon className="w-4 h-4" />
+            Dinner
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Zone Summary */}
+      {zoneSummary.length > 0 && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-bold uppercase tracking-wide flex items-center gap-2">
+              <MealIcon className="w-5 h-5" />
+              Zone-wise Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {zoneSummary.map((zone) => (
+                <div key={zone.zone_id || 'unassigned'} className="p-4 bg-secondary/30 rounded-lg">
+                  <h4 className="font-medium text-accent">{zone.zone_name}</h4>
+                  <div className="mt-2 space-y-1">
+                    {zone.combos?.map((combo, idx) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span>{combo.combo_name}</span>
+                        <span className="font-mono font-bold">{combo.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters */}
+      <Card className="bg-card border-border">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Zone</label>
+              <Select value={filterZone} onValueChange={setFilterZone}>
+                <SelectTrigger data-testid="filter-zone" className="w-[180px] bg-input">
+                  <SelectValue placeholder="All Zones" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Zones</SelectItem>
+                  {zones.map((zone) => (
+                    <SelectItem key={zone.id} value={zone.id}>
+                      {zone.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger data-testid="filter-status" className="w-[180px] bg-input">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="packed">Packed</SelectItem>
+                  <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Orders Grid */}
       {filteredOrders.length === 0 ? (
         <Card className="bg-card border-border">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <AlertCircle className="w-16 h-16 text-muted-foreground/50 mb-4" />
-            <p className="text-muted-foreground text-lg">No orders found</p>
+            <p className="text-muted-foreground text-lg">No {mealType} orders</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Orders will appear here once placed
+              Generate orders from the dashboard
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredOrders.map((order, index) => (
-            <Card
+            <div
               key={order.id}
-              data-testid={`order-card-${order.id}`}
-              className="bg-card border-border hover:border-primary/50 transition-colors duration-300 animate-fade-in cursor-pointer"
+              className="animate-fade-in"
               style={{ animationDelay: `${index * 0.03}s` }}
-              onClick={() => viewOrderDetails(order)}
             >
-              <CardContent className="p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  {/* Order Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <p className="font-mono text-sm text-muted-foreground">
-                        #{order.id.slice(0, 8)}
-                      </p>
-                      <StatusBadge status={order.status} />
-                      <span className="text-xs text-muted-foreground font-mono">
-                        <Clock className="w-3 h-3 inline mr-1" />
-                        {new Date(order.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                      <p className="font-medium">
-                        {order.restaurant_name || "Unknown Restaurant"}
-                      </p>
-                      <span className="text-sm text-muted-foreground">
-                        {order.items?.length || 0} items
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1 truncate">
-                      <MapPin className="w-3 h-3 inline mr-1" />
-                      {order.delivery_address}
-                    </p>
-                    {order.delivery_boy_name && (
-                      <p className="text-sm text-accent mt-1">
-                        Delivery: {order.delivery_boy_name}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Price and Action */}
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="font-mono font-bold text-xl">
-                        ${(order.total_amount + order.delivery_fee).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        +${order.delivery_fee.toFixed(2)} delivery
-                      </p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              <OrderCard
+                order={order}
+                onStatusUpdate={handleStatusUpdate}
+                deliveryBoys={deliveryBoys}
+              />
+            </div>
           ))}
         </div>
       )}
-
-      {/* Order Details Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="glass border-border max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold uppercase flex items-center gap-3">
-              <ShoppingBag className="w-5 h-5 text-primary" />
-              Order Details
-            </DialogTitle>
-          </DialogHeader>
-          {selectedOrder && (
-            <div className="space-y-4 py-4">
-              {/* Order ID and Status */}
-              <div className="flex items-center justify-between">
-                <p className="font-mono text-sm text-muted-foreground">
-                  #{selectedOrder.id.slice(0, 8)}
-                </p>
-                <StatusBadge status={selectedOrder.status} />
-              </div>
-
-              {/* Restaurant */}
-              <div className="p-3 bg-secondary/30 rounded-lg">
-                <p className="text-sm text-muted-foreground">Restaurant</p>
-                <p className="font-medium">{selectedOrder.restaurant_name || "Unknown"}</p>
-              </div>
-
-              {/* Customer */}
-              <div className="p-3 bg-secondary/30 rounded-lg">
-                <p className="text-sm text-muted-foreground">Customer</p>
-                <p className="font-medium">{selectedOrder.customer_name || "Unknown"}</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  <MapPin className="w-3 h-3 inline mr-1" />
-                  {selectedOrder.delivery_address}
-                </p>
-              </div>
-
-              {/* Items */}
-              <div className="p-3 bg-secondary/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">Items</p>
-                <ScrollArea className="max-h-[150px]">
-                  {selectedOrder.items?.map((item, idx) => (
-                    <div key={idx} className="flex justify-between py-1">
-                      <span>
-                        {item.quantity}x {item.name}
-                      </span>
-                      <span className="font-mono">
-                        ${(item.price * item.quantity).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
-                </ScrollArea>
-                <div className="border-t border-border mt-2 pt-2 space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal</span>
-                    <span className="font-mono">${selectedOrder.total_amount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Delivery Fee</span>
-                    <span className="font-mono">${selectedOrder.delivery_fee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between font-bold">
-                    <span>Total</span>
-                    <span className="font-mono">
-                      ${(selectedOrder.total_amount + selectedOrder.delivery_fee).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Delivery Boy Assignment */}
-              {selectedOrder.status === "preparing" && (
-                <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
-                  <p className="text-sm text-muted-foreground mb-2">Assign Delivery Boy</p>
-                  <Select value={selectedDeliveryBoy} onValueChange={setSelectedDeliveryBoy}>
-                    <SelectTrigger data-testid="assign-delivery-boy" className="bg-input">
-                      <SelectValue placeholder="Select delivery boy" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {deliveryBoys.map((boy) => (
-                        <SelectItem key={boy.id} value={boy.id}>
-                          {boy.name} ({boy.phone})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Assigned Delivery Boy */}
-              {selectedOrder.delivery_boy_name && (
-                <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
-                  <p className="text-sm text-muted-foreground">Assigned Delivery Boy</p>
-                  <p className="font-medium text-accent">{selectedOrder.delivery_boy_name}</p>
-                </div>
-              )}
-
-              {/* Notes */}
-              {selectedOrder.notes && (
-                <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                  <p className="text-sm text-muted-foreground">Notes</p>
-                  <p className="text-sm">{selectedOrder.notes}</p>
-                </div>
-              )}
-
-              {/* Timestamps */}
-              <div className="text-xs text-muted-foreground font-mono">
-                <p>Created: {new Date(selectedOrder.created_at).toLocaleString()}</p>
-                <p>Updated: {new Date(selectedOrder.updated_at).toLocaleString()}</p>
-              </div>
-            </div>
-          )}
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            {selectedOrder && statusConfig[selectedOrder.status]?.next && (
-              <Button
-                data-testid="advance-order-status"
-                onClick={() =>
-                  handleUpdateStatus(selectedOrder, statusConfig[selectedOrder.status].next)
-                }
-                disabled={updating}
-                className="font-bold"
-              >
-                {updating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  `Mark as ${statusConfig[statusConfig[selectedOrder.status].next].label}`
-                )}
-              </Button>
-            )}
-            {selectedOrder &&
-              selectedOrder.status !== "delivered" &&
-              selectedOrder.status !== "cancelled" && (
-                <Button
-                  variant="secondary"
-                  data-testid="cancel-order-btn"
-                  className="text-destructive hover:bg-destructive/10"
-                  onClick={() => handleCancelOrder(selectedOrder)}
-                  disabled={updating}
-                >
-                  Cancel Order
-                </Button>
-              )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
