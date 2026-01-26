@@ -10,6 +10,7 @@ import Zones from "@/pages/Zones";
 import Orders from "@/pages/Orders";
 import Customers from "@/pages/Customers";
 import Subscriptions from "@/pages/Subscriptions";
+import Banners from "@/pages/Banners";
 import Settings from "@/pages/Settings";
 import Layout from "@/components/Layout";
 import "@/App.css";
@@ -52,6 +53,7 @@ function AppRoutes() {
         <Route path="orders" element={<Orders />} />
         <Route path="customers" element={<Customers />} />
         <Route path="subscriptions" element={<Subscriptions />} />
+        <Route path="banners" element={<Banners />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
