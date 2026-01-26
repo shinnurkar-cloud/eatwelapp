@@ -1,0 +1,172 @@
+{
+  "identity": {
+    "name": "E1",
+    "role": "Creative Designer",
+    "archetype": "The Performance Pro (Logistics & Ops Edition)",
+    "principles": [
+      "Fusion over Imitation: Mix Logistics Precision with Culinary Warmth",
+      "Emotion First: Command Center vibes - Control, Speed, Reliability",
+      "Content is King: Data density without clutter",
+      "Zoom In: Focus on the map and the metric",
+      "Negative Space: Breathing room for critical alerts",
+      "Contrast: High-vis accents on deep dark backgrounds"
+    ]
+  },
+  "typography": {
+    "primary_font": "Inter",
+    "secondary_font": "Barlow Condensed",
+    "mono_font": "JetBrains Mono",
+    "h1": "font-secondary text-5xl font-black tracking-tight leading-none",
+    "h2": "font-secondary text-4xl font-bold tracking-tight",
+    "h3": "font-secondary text-2xl font-bold tracking-wide uppercase",
+    "body": "font-primary text-base leading-relaxed text-muted-foreground",
+    "caption": "font-mono text-xs tracking-wider uppercase text-muted-foreground/70",
+    "data_value": "font-mono text-xl font-bold text-foreground",
+    "instructions": "Use 'Barlow Condensed' for all major headings to give a 'Command Center' feel. Use 'JetBrains Mono' for all numerical data, IDs, and timestamps. Use 'Inter' for standard UI text."
+  },
+  "colors": {
+    "theme": "dark",
+    "palette": {
+      "background": "#09090B",
+      "foreground": "#FAFAFA",
+      "card": "#18181B",
+      "card_foreground": "#FAFAFA",
+      "popover": "#18181B",
+      "popover_foreground": "#FAFAFA",
+      "primary": "#FF4F00",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#27272A",
+      "secondary_foreground": "#FAFAFA",
+      "muted": "#27272A",
+      "muted_foreground": "#A1A1AA",
+      "accent": "#007AFF",
+      "accent_foreground": "#FFFFFF",
+      "destructive": "#EF4444",
+      "destructive_foreground": "#FFFFFF",
+      "border": "#27272A",
+      "input": "#27272A",
+      "ring": "#FF4F00"
+    },
+    "usage": {
+      "primary": "Use 'Electric Orange' (#FF4F00) for primary actions, active states, and 'Food' related metrics.",
+      "accent": "Use 'Volt Blue' (#007AFF) for 'Logistics', 'Map' markers, and 'Delivery Boy' indicators.",
+      "background": "Deep Obsidian (#09090B) - never pure black. Use subtle gradients or noise textures if possible.",
+      "surface": "Use 'Zinc' scales for surfaces. Avoid blue-tinted grays; stick to neutral or warm-tinted grays."
+    }
+  },
+  "layout": {
+    "spacing_scale": "Generous - p-6, p-8, p-12",
+    "grid_system": "Bento Grid Mode B (High Density)",
+    "container_style": "Fluid with max-w-[1920px] for dashboard views",
+    "sidebar": "Fixed left sidebar, collapsible, dark glassmorphism effect",
+    "card_style": "Flat, sharp corners or minimal rounded-md (4px). 1px border (#27272A). No heavy shadows.",
+    "z_index": {
+      "map": 0,
+      "overlay": 10,
+      "sidebar": 40,
+      "modal": 50,
+      "toast": 100
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-bold tracking-wide uppercase text-sm h-10 px-6",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md font-medium text-sm h-10 px-4",
+      "ghost": "hover:bg-accent hover:text-accent-foreground rounded-md"
+    },
+    "cards": {
+      "dashboard_metric": "bg-card border border-border p-6 flex flex-col justify-between h-full hover:border-primary/50 transition-colors duration-300",
+      "map_overlay": "bg-black/80 backdrop-blur-md border border-white/10 text-white p-4 rounded-lg shadow-2xl"
+    },
+    "inputs": {
+      "default": "bg-input border-transparent focus:border-primary focus:ring-1 focus:ring-primary rounded-md h-10 text-sm"
+    },
+    "status_badges": {
+      "pending": "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-2 py-0.5 rounded text-xs font-mono uppercase",
+      "active": "bg-green-500/10 text-green-500 border border-green-500/20 px-2 py-0.5 rounded text-xs font-mono uppercase",
+      "critical": "bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded text-xs font-mono uppercase"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "Use 'backdrop-blur-xl bg-black/60 border border-white/10' for floating panels over maps.",
+    "grid_lines": "Use subtle background grid patterns (opacity 0.05) in empty states or dashboard backgrounds.",
+    "gradients": "Avoid full gradients. Use 'glow' effects: radial-gradient(circle at center, var(--primary) 0%, transparent 70%) opacity-20 behind key metrics."
+  },
+  "images": {
+    "food": [
+      {
+        "url": "https://images.unsplash.com/photo-1693163107937-2a200de0d733?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Gourmet food dark background",
+        "category": "hero"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1744135472023-96262825b9c2?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Chocolate dessert",
+        "category": "dessert"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1743193144044-fb58eb902b91?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Lemon slices dark plate",
+        "category": "ingredient"
+      }
+    ],
+    "restaurant": [
+      {
+        "url": "https://images.unsplash.com/photo-1767500263347-4eef1b448fc2?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Dark modern restaurant interior",
+        "category": "interior"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1761515397156-a966ca011fe3?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Table setting",
+        "category": "table"
+      }
+    ],
+    "delivery": [
+      {
+        "url": "https://images.unsplash.com/photo-1758872815673-42e905378a0f?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Red scooter delivery",
+        "category": "vehicle"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1764745223157-64f76610cb3c?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Courier riding",
+        "category": "action"
+      }
+    ],
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1764545973653-94c40d993495?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Professional man portrait",
+        "category": "user"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1758534063829-a72058381e21?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Man with glasses",
+        "category": "admin"
+      }
+    ],
+    "maps": [
+      {
+        "url": "https://images.pexels.com/photos/33998346/pexels-photo-33998346.jpeg",
+        "alt": "Dark mode city map",
+        "category": "map_placeholder"
+      }
+    ]
+  },
+  "universal_guidelines": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for overlays.",
+    "You MUST NOT apply universal transition. Eg: 'transition: all'. This results in breaking transforms.",
+    "You MUST NOT center align the app container.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
+    "NEVER use AI assistant Emoji characters for icons.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations.",
+    "All interactive and key informational elements MUST include a 'data-testid' attribute."
+  ],
+  "instructions_to_main_agent": "1. Implement the 'Bento Grid' layout for the Dashboard Overview. 2. Use the 'Map Overlay' card style for the Geo-fencing tools. 3. Ensure the 'Sidebar' is collapsible and uses the glassmorphism effect. 4. Use 'Barlow Condensed' for all page titles and section headers. 5. Use 'JetBrains Mono' for all order IDs, prices, and timestamps. 6. Implement the 'Electric Orange' as the primary brand color for food/orders and 'Volt Blue' for delivery/logistics."
+}
