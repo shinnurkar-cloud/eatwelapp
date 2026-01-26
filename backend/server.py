@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Query, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -6,13 +6,17 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time
 import jwt
 import bcrypt
-from bson import ObjectId
+import cloudinary
+import cloudinary.utils
+import cloudinary.uploader
+import time as time_module
+import asyncio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -23,15 +27,23 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # JWT Settings
-JWT_SECRET = os.environ.get('JWT_SECRET', 'food-delivery-secret-key-change-in-production')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'zonebite-secret-key-change-in-production')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+
+# Cloudinary config
+cloudinary.config(
+    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", ""),
+    api_key=os.environ.get("CLOUDINARY_API_KEY", ""),
+    api_secret=os.environ.get("CLOUDINARY_API_SECRET", ""),
+    secure=True
+)
 
 # Security
 security = HTTPBearer()
 
 # Create the main app
-app = FastAPI(title="ZoneBite - Food Delivery Admin API")
+app = FastAPI(title="ZoneBite - Subscription Meal Delivery Admin API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -43,133 +55,166 @@ logger = logging.getLogger(__name__)
 # ===================== MODELS =====================
 
 class UserBase(BaseModel):
-    email: EmailStr
     name: str
-    phone: Optional[str] = None
-    role: str = "customer"  # admin, delivery_boy, customer
+    mobile: str
+    role: str = "delivery_boy"  # admin, delivery_boy
 
 class UserCreate(UserBase):
+    login_id: str
     password: str
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    login_id: str
     password: str
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
     id: str
-    created_at: str
+    name: str
+    mobile: str
+    login_id: str
+    role: str
     is_active: bool = True
+    assigned_zones: List[str] = []
+    created_at: str
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
 
-class DeliveryZoneCreate(BaseModel):
+# Combo Models
+class ComboCreate(BaseModel):
     name: str
-    description: Optional[str] = None
-    polygon: List[List[float]]  # [[lng, lat], [lng, lat], ...]
-    is_active: bool = True
-    delivery_fee: float = 0.0
+    dishes: List[str]
 
-class DeliveryZoneResponse(DeliveryZoneCreate):
+class ComboResponse(ComboCreate):
     id: str
     created_at: str
 
-class RestaurantCreate(BaseModel):
+# Subscription Plan Models
+class MealSchedule(BaseModel):
+    day: str  # Monday, Tuesday, etc.
+    meals: List[str]  # breakfast, lunch, dinner
+
+class PlanCreate(BaseModel):
     name: str
-    description: Optional[str] = None
-    address: str
-    phone: str
+    combo_id: str
+    price: float
+    validity_days: int  # 7, 15, 30
     image_url: Optional[str] = None
-    cuisine_type: Optional[str] = None
+    schedule: List[MealSchedule]  # Which days and which meals
+
+class PlanResponse(PlanCreate):
+    id: str
+    combo_name: Optional[str] = None
     is_active: bool = True
-    rating: float = 0.0
+    created_at: str
+
+# Zone Models
+class ZoneCreate(BaseModel):
+    name: str
+    polygon: List[List[float]]  # [[lng, lat], ...]
+    assigned_delivery_boys: List[str] = []
+
+class ZoneResponse(ZoneCreate):
+    id: str
+    is_active: bool = True
+    created_at: str
+
+# Customer Models
+class CustomerCreate(BaseModel):
+    name: str
+    mobile: str
+    password: str
+    address: str
     location: Optional[List[float]] = None  # [lng, lat]
 
-class RestaurantResponse(RestaurantCreate):
+class CustomerResponse(BaseModel):
     id: str
+    customer_id: str  # System generated ID like CUS001
+    name: str
+    mobile: str
+    address: str
+    zone_id: Optional[str] = None
+    zone_name: Optional[str] = None
+    is_active: bool = True
     created_at: str
 
-class MenuItemCreate(BaseModel):
-    restaurant_id: str
-    name: str
-    description: Optional[str] = None
-    price: float
-    category: str
-    image_url: Optional[str] = None
-    is_available: bool = True
-
-class MenuItemResponse(MenuItemCreate):
-    id: str
-    created_at: str
-
-class OrderItemCreate(BaseModel):
-    menu_item_id: str
-    name: str
-    quantity: int
-    price: float
-
-class OrderCreate(BaseModel):
+# Subscription Models
+class SubscriptionCreate(BaseModel):
     customer_id: str
-    restaurant_id: str
-    items: List[OrderItemCreate]
-    delivery_address: str
-    delivery_location: Optional[List[float]] = None  # [lng, lat]
-    notes: Optional[str] = None
+    plan_id: str
 
-class OrderResponse(BaseModel):
+class SubscriptionResponse(BaseModel):
     id: str
     customer_id: str
     customer_name: Optional[str] = None
-    restaurant_id: str
-    restaurant_name: Optional[str] = None
-    items: List[OrderItemCreate]
-    total_amount: float
-    delivery_fee: float
-    delivery_address: str
-    delivery_location: Optional[List[float]] = None
-    status: str  # pending, confirmed, preparing, out_for_delivery, delivered, cancelled
+    plan_id: str
+    plan_name: Optional[str] = None
+    combo_name: Optional[str] = None
+    start_date: str
+    end_date: str
+    is_active: bool = True
+    is_paused: bool = False
+    created_at: str
+
+# Order Models
+class OrderResponse(BaseModel):
+    id: str
+    subscription_id: str
+    customer_id: str
+    customer_name: Optional[str] = None
+    customer_address: Optional[str] = None
+    customer_mobile: Optional[str] = None
+    zone_id: Optional[str] = None
+    zone_name: Optional[str] = None
+    combo_id: str
+    combo_name: Optional[str] = None
+    plan_name: Optional[str] = None
+    meal_type: str  # breakfast, lunch, dinner
+    status: str  # pending, packed, out_for_delivery, delivered
     delivery_boy_id: Optional[str] = None
     delivery_boy_name: Optional[str] = None
-    notes: Optional[str] = None
+    order_date: str
     created_at: str
-    updated_at: str
 
 class OrderStatusUpdate(BaseModel):
     status: str
     delivery_boy_id: Optional[str] = None
 
-class DeliveryBoyCreate(BaseModel):
-    email: EmailStr
-    name: str
-    phone: str
-    password: str
-    vehicle_type: Optional[str] = None
-    vehicle_number: Optional[str] = None
+# Settings Models
+class MealTimings(BaseModel):
+    breakfast_start: str = "03:00"
+    breakfast_end: str = "09:00"
+    lunch_start: str = "09:10"
+    lunch_end: str = "15:00"
+    dinner_start: str = "15:10"
+    dinner_end: str = "21:00"
 
-class DeliveryBoyResponse(BaseModel):
-    id: str
-    email: str
-    name: str
-    phone: str
-    vehicle_type: Optional[str] = None
-    vehicle_number: Optional[str] = None
-    is_active: bool = True
-    is_available: bool = True
-    current_location: Optional[List[float]] = None
-    total_deliveries: int = 0
-    created_at: str
+class SettingsUpdate(BaseModel):
+    meal_timings: Optional[MealTimings] = None
+    help_number: Optional[str] = None
 
+class SettingsResponse(BaseModel):
+    meal_timings: MealTimings
+    help_number: str
+
+# Dashboard Models
 class DashboardStats(BaseModel):
-    total_orders: int
-    pending_orders: int
-    active_deliveries: int
-    total_revenue: float
-    total_restaurants: int
+    total_active_customers: int
+    total_orders_today: int
     total_delivery_boys: int
-    total_customers: int
-    total_zones: int
+    breakfast_orders: int
+    lunch_orders: int
+    dinner_orders: int
+    delivered_today: int
+    pending_today: int
+
+class ZoneOrderSummary(BaseModel):
+    zone_id: str
+    zone_name: str
+    meal_type: str
+    combos: List[Dict]  # [{combo_name: str, count: int}]
 
 # ===================== HELPERS =====================
 
@@ -179,10 +224,10 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
-def create_token(user_id: str, email: str, role: str) -> str:
+def create_token(user_id: str, login_id: str, role: str) -> str:
     payload = {
         "sub": user_id,
-        "email": email,
+        "login_id": login_id,
         "role": role,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     }
@@ -208,63 +253,39 @@ async def require_admin(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
-def serialize_doc(doc: dict) -> dict:
-    if doc and "_id" in doc:
-        del doc["_id"]
-    return doc
+async def generate_customer_id():
+    count = await db.customers.count_documents({})
+    return f"CUS{str(count + 1).zfill(4)}"
+
+def get_today_date():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+def get_day_name():
+    return datetime.now(timezone.utc).strftime("%A")
 
 # ===================== AUTH ROUTES =====================
 
-@api_router.post("/auth/register", response_model=TokenResponse)
-async def register(user: UserCreate):
-    existing = await db.users.find_one({"email": user.email})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    user_id = str(uuid.uuid4())
-    user_doc = {
-        "id": user_id,
-        "email": user.email,
-        "name": user.name,
-        "phone": user.phone,
-        "role": user.role,
-        "password_hash": hash_password(user.password),
-        "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.users.insert_one(user_doc)
-    
-    token = create_token(user_id, user.email, user.role)
-    return TokenResponse(
-        access_token=token,
-        user=UserResponse(
-            id=user_id,
-            email=user.email,
-            name=user.name,
-            phone=user.phone,
-            role=user.role,
-            created_at=user_doc["created_at"],
-            is_active=True
-        )
-    )
-
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    user = await db.users.find_one({"login_id": credentials.login_id}, {"_id": 0})
     if not user or not verify_password(credentials.password, user.get("password_hash", "")):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    token = create_token(user["id"], user["email"], user["role"])
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=401, detail="Account is deactivated")
+    
+    token = create_token(user["id"], user["login_id"], user["role"])
     return TokenResponse(
         access_token=token,
         user=UserResponse(
             id=user["id"],
-            email=user["email"],
             name=user["name"],
-            phone=user.get("phone"),
+            mobile=user["mobile"],
+            login_id=user["login_id"],
             role=user["role"],
-            created_at=user["created_at"],
-            is_active=user.get("is_active", True)
+            is_active=user.get("is_active", True),
+            assigned_zones=user.get("assigned_zones", []),
+            created_at=user["created_at"]
         )
     )
 
@@ -272,21 +293,220 @@ async def login(credentials: UserLogin):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(
         id=current_user["id"],
-        email=current_user["email"],
         name=current_user["name"],
-        phone=current_user.get("phone"),
+        mobile=current_user["mobile"],
+        login_id=current_user["login_id"],
         role=current_user["role"],
-        created_at=current_user["created_at"],
-        is_active=current_user.get("is_active", True)
+        is_active=current_user.get("is_active", True),
+        assigned_zones=current_user.get("assigned_zones", []),
+        created_at=current_user["created_at"]
     )
 
-# ===================== DELIVERY ZONES ROUTES =====================
+# ===================== DELIVERY BOY MANAGEMENT =====================
 
-@api_router.post("/zones", response_model=DeliveryZoneResponse)
-async def create_zone(zone: DeliveryZoneCreate, admin: dict = Depends(require_admin)):
+@api_router.post("/delivery-boys", response_model=UserResponse)
+async def create_delivery_boy(user: UserCreate, admin: dict = Depends(require_admin)):
+    existing = await db.users.find_one({"login_id": user.login_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Login ID already exists")
+    
+    user_id = str(uuid.uuid4())
+    user_doc = {
+        "id": user_id,
+        "name": user.name,
+        "mobile": user.mobile,
+        "login_id": user.login_id,
+        "password_hash": hash_password(user.password),
+        "role": "delivery_boy",
+        "is_active": True,
+        "assigned_zones": [],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(user_doc)
+    
+    return UserResponse(
+        id=user_id,
+        name=user.name,
+        mobile=user.mobile,
+        login_id=user.login_id,
+        role="delivery_boy",
+        is_active=True,
+        assigned_zones=[],
+        created_at=user_doc["created_at"]
+    )
+
+@api_router.get("/delivery-boys", response_model=List[UserResponse])
+async def get_delivery_boys(admin: dict = Depends(require_admin)):
+    boys = await db.users.find({"role": "delivery_boy"}, {"_id": 0, "password_hash": 0}).to_list(100)
+    return [UserResponse(**boy) for boy in boys]
+
+@api_router.put("/delivery-boys/{boy_id}/status")
+async def toggle_delivery_boy_status(boy_id: str, is_active: bool, admin: dict = Depends(require_admin)):
+    result = await db.users.find_one_and_update(
+        {"id": boy_id, "role": "delivery_boy"},
+        {"$set": {"is_active": is_active}},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Delivery boy not found")
+    return {"message": f"Delivery boy {'activated' if is_active else 'deactivated'}"}
+
+@api_router.put("/delivery-boys/{boy_id}/zones")
+async def assign_zones_to_delivery_boy(boy_id: str, zone_ids: List[str], admin: dict = Depends(require_admin)):
+    result = await db.users.find_one_and_update(
+        {"id": boy_id, "role": "delivery_boy"},
+        {"$set": {"assigned_zones": zone_ids}},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Delivery boy not found")
+    return {"message": "Zones assigned successfully"}
+
+@api_router.delete("/delivery-boys/{boy_id}")
+async def delete_delivery_boy(boy_id: str, admin: dict = Depends(require_admin)):
+    result = await db.users.delete_one({"id": boy_id, "role": "delivery_boy"})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Delivery boy not found")
+    return {"message": "Delivery boy deleted"}
+
+# ===================== COMBO MANAGEMENT =====================
+
+@api_router.post("/combos", response_model=ComboResponse)
+async def create_combo(combo: ComboCreate, admin: dict = Depends(require_admin)):
+    combo_id = str(uuid.uuid4())
+    combo_doc = {
+        "id": combo_id,
+        "name": combo.name,
+        "dishes": combo.dishes,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.combos.insert_one(combo_doc)
+    return ComboResponse(id=combo_id, **combo.model_dump(), created_at=combo_doc["created_at"])
+
+@api_router.get("/combos", response_model=List[ComboResponse])
+async def get_combos():
+    combos = await db.combos.find({}, {"_id": 0}).to_list(100)
+    return [ComboResponse(**combo) for combo in combos]
+
+@api_router.put("/combos/{combo_id}", response_model=ComboResponse)
+async def update_combo(combo_id: str, combo: ComboCreate, admin: dict = Depends(require_admin)):
+    result = await db.combos.find_one_and_update(
+        {"id": combo_id},
+        {"$set": {"name": combo.name, "dishes": combo.dishes}},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Combo not found")
+    return ComboResponse(**{k: v for k, v in result.items() if k != "_id"})
+
+@api_router.delete("/combos/{combo_id}")
+async def delete_combo(combo_id: str, admin: dict = Depends(require_admin)):
+    result = await db.combos.delete_one({"id": combo_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Combo not found")
+    return {"message": "Combo deleted"}
+
+# ===================== SUBSCRIPTION PLAN MANAGEMENT =====================
+
+@api_router.post("/plans", response_model=PlanResponse)
+async def create_plan(plan: PlanCreate, admin: dict = Depends(require_admin)):
+    # Verify combo exists
+    combo = await db.combos.find_one({"id": plan.combo_id}, {"_id": 0})
+    if not combo:
+        raise HTTPException(status_code=400, detail="Combo not found")
+    
+    plan_id = str(uuid.uuid4())
+    plan_doc = {
+        "id": plan_id,
+        "name": plan.name,
+        "combo_id": plan.combo_id,
+        "price": plan.price,
+        "validity_days": plan.validity_days,
+        "image_url": plan.image_url,
+        "schedule": [s.model_dump() for s in plan.schedule],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.plans.insert_one(plan_doc)
+    
+    return PlanResponse(
+        id=plan_id,
+        name=plan.name,
+        combo_id=plan.combo_id,
+        combo_name=combo["name"],
+        price=plan.price,
+        validity_days=plan.validity_days,
+        image_url=plan.image_url,
+        schedule=plan.schedule,
+        is_active=True,
+        created_at=plan_doc["created_at"]
+    )
+
+@api_router.get("/plans", response_model=List[PlanResponse])
+async def get_plans(active_only: bool = False):
+    query = {"is_active": True} if active_only else {}
+    plans = await db.plans.find(query, {"_id": 0}).to_list(100)
+    
+    result = []
+    for plan in plans:
+        combo = await db.combos.find_one({"id": plan["combo_id"]}, {"_id": 0})
+        plan["combo_name"] = combo["name"] if combo else None
+        plan["schedule"] = [MealSchedule(**s) for s in plan.get("schedule", [])]
+        result.append(PlanResponse(**plan))
+    
+    return result
+
+@api_router.put("/plans/{plan_id}", response_model=PlanResponse)
+async def update_plan(plan_id: str, plan: PlanCreate, admin: dict = Depends(require_admin)):
+    combo = await db.combos.find_one({"id": plan.combo_id}, {"_id": 0})
+    if not combo:
+        raise HTTPException(status_code=400, detail="Combo not found")
+    
+    update_doc = {
+        "name": plan.name,
+        "combo_id": plan.combo_id,
+        "price": plan.price,
+        "validity_days": plan.validity_days,
+        "image_url": plan.image_url,
+        "schedule": [s.model_dump() for s in plan.schedule]
+    }
+    
+    result = await db.plans.find_one_and_update(
+        {"id": plan_id},
+        {"$set": update_doc},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    result["combo_name"] = combo["name"]
+    result["schedule"] = [MealSchedule(**s) for s in result.get("schedule", [])]
+    return PlanResponse(**{k: v for k, v in result.items() if k != "_id"})
+
+@api_router.put("/plans/{plan_id}/status")
+async def toggle_plan_status(plan_id: str, is_active: bool, admin: dict = Depends(require_admin)):
+    result = await db.plans.find_one_and_update(
+        {"id": plan_id},
+        {"$set": {"is_active": is_active}},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return {"message": f"Plan {'activated' if is_active else 'deactivated'}"}
+
+@api_router.delete("/plans/{plan_id}")
+async def delete_plan(plan_id: str, admin: dict = Depends(require_admin)):
+    result = await db.plans.delete_one({"id": plan_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return {"message": "Plan deleted"}
+
+# ===================== ZONE MANAGEMENT =====================
+
+@api_router.post("/zones", response_model=ZoneResponse)
+async def create_zone(zone: ZoneCreate, admin: dict = Depends(require_admin)):
     zone_id = str(uuid.uuid4())
     
-    # Close polygon if not closed
     polygon = zone.polygon
     if polygon and polygon[0] != polygon[-1]:
         polygon.append(polygon[0])
@@ -294,58 +514,57 @@ async def create_zone(zone: DeliveryZoneCreate, admin: dict = Depends(require_ad
     zone_doc = {
         "id": zone_id,
         "name": zone.name,
-        "description": zone.description,
-        "polygon": {
-            "type": "Polygon",
-            "coordinates": [polygon]
-        },
-        "is_active": zone.is_active,
-        "delivery_fee": zone.delivery_fee,
+        "polygon": {"type": "Polygon", "coordinates": [polygon]},
+        "assigned_delivery_boys": zone.assigned_delivery_boys,
+        "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.delivery_zones.insert_one(zone_doc)
+    await db.zones.insert_one(zone_doc)
     
-    return DeliveryZoneResponse(
+    # Update delivery boys with this zone
+    if zone.assigned_delivery_boys:
+        for boy_id in zone.assigned_delivery_boys:
+            await db.users.update_one(
+                {"id": boy_id, "role": "delivery_boy"},
+                {"$addToSet": {"assigned_zones": zone_id}}
+            )
+    
+    return ZoneResponse(
         id=zone_id,
         name=zone.name,
-        description=zone.description,
         polygon=polygon,
-        is_active=zone.is_active,
-        delivery_fee=zone.delivery_fee,
+        assigned_delivery_boys=zone.assigned_delivery_boys,
+        is_active=True,
         created_at=zone_doc["created_at"]
     )
 
-@api_router.get("/zones", response_model=List[DeliveryZoneResponse])
-async def get_zones(active_only: bool = False):
-    query = {"is_active": True} if active_only else {}
-    zones = await db.delivery_zones.find(query, {"_id": 0}).to_list(100)
+@api_router.get("/zones", response_model=List[ZoneResponse])
+async def get_zones():
+    zones = await db.zones.find({}, {"_id": 0}).to_list(100)
     return [
-        DeliveryZoneResponse(
+        ZoneResponse(
             id=z["id"],
             name=z["name"],
-            description=z.get("description"),
             polygon=z["polygon"]["coordinates"][0] if "polygon" in z else [],
+            assigned_delivery_boys=z.get("assigned_delivery_boys", []),
             is_active=z.get("is_active", True),
-            delivery_fee=z.get("delivery_fee", 0),
             created_at=z["created_at"]
         ) for z in zones
     ]
 
-@api_router.put("/zones/{zone_id}", response_model=DeliveryZoneResponse)
-async def update_zone(zone_id: str, zone: DeliveryZoneCreate, admin: dict = Depends(require_admin)):
+@api_router.put("/zones/{zone_id}", response_model=ZoneResponse)
+async def update_zone(zone_id: str, zone: ZoneCreate, admin: dict = Depends(require_admin)):
     polygon = zone.polygon
     if polygon and polygon[0] != polygon[-1]:
         polygon.append(polygon[0])
     
     update_doc = {
         "name": zone.name,
-        "description": zone.description,
         "polygon": {"type": "Polygon", "coordinates": [polygon]},
-        "is_active": zone.is_active,
-        "delivery_fee": zone.delivery_fee
+        "assigned_delivery_boys": zone.assigned_delivery_boys
     }
     
-    result = await db.delivery_zones.find_one_and_update(
+    result = await db.zones.find_one_and_update(
         {"id": zone_id},
         {"$set": update_doc},
         return_document=True
@@ -354,264 +573,308 @@ async def update_zone(zone_id: str, zone: DeliveryZoneCreate, admin: dict = Depe
     if not result:
         raise HTTPException(status_code=404, detail="Zone not found")
     
-    return DeliveryZoneResponse(
+    return ZoneResponse(
         id=result["id"],
         name=result["name"],
-        description=result.get("description"),
         polygon=result["polygon"]["coordinates"][0],
+        assigned_delivery_boys=result.get("assigned_delivery_boys", []),
         is_active=result.get("is_active", True),
-        delivery_fee=result.get("delivery_fee", 0),
         created_at=result["created_at"]
     )
 
 @api_router.delete("/zones/{zone_id}")
 async def delete_zone(zone_id: str, admin: dict = Depends(require_admin)):
-    result = await db.delivery_zones.delete_one({"id": zone_id})
+    result = await db.zones.delete_one({"id": zone_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Zone not found")
-    return {"message": "Zone deleted successfully"}
+    return {"message": "Zone deleted"}
 
-@api_router.post("/zones/check-delivery")
-async def check_delivery_location(location: List[float]):
-    """Check if a location [lng, lat] is within any delivery zone"""
-    zones = await db.delivery_zones.find({
-        "is_active": True,
-        "polygon": {
-            "$geoIntersects": {
-                "$geometry": {
-                    "type": "Point",
-                    "coordinates": location
-                }
-            }
-        }
-    }, {"_id": 0}).to_list(100)
+# ===================== CUSTOMER MANAGEMENT =====================
+
+@api_router.post("/customers", response_model=CustomerResponse)
+async def create_customer(customer: CustomerCreate, admin: dict = Depends(require_admin)):
+    customer_uuid = str(uuid.uuid4())
+    customer_id = await generate_customer_id()
     
-    return {
-        "deliverable": len(zones) > 0,
-        "zones": [
-            DeliveryZoneResponse(
-                id=z["id"],
-                name=z["name"],
-                description=z.get("description"),
-                polygon=z["polygon"]["coordinates"][0],
-                is_active=z.get("is_active", True),
-                delivery_fee=z.get("delivery_fee", 0),
-                created_at=z["created_at"]
-            ) for z in zones
-        ]
-    }
-
-# ===================== RESTAURANTS ROUTES =====================
-
-@api_router.post("/restaurants", response_model=RestaurantResponse)
-async def create_restaurant(restaurant: RestaurantCreate, admin: dict = Depends(require_admin)):
-    restaurant_id = str(uuid.uuid4())
-    restaurant_doc = {
-        "id": restaurant_id,
-        **restaurant.model_dump(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    if restaurant.location:
-        restaurant_doc["location"] = {"type": "Point", "coordinates": restaurant.location}
-    
-    await db.restaurants.insert_one(restaurant_doc)
-    return RestaurantResponse(id=restaurant_id, **restaurant.model_dump(), created_at=restaurant_doc["created_at"])
-
-@api_router.get("/restaurants", response_model=List[RestaurantResponse])
-async def get_restaurants(active_only: bool = False):
-    query = {"is_active": True} if active_only else {}
-    restaurants = await db.restaurants.find(query, {"_id": 0}).to_list(100)
-    return [
-        RestaurantResponse(
-            id=r["id"],
-            name=r["name"],
-            description=r.get("description"),
-            address=r["address"],
-            phone=r["phone"],
-            image_url=r.get("image_url"),
-            cuisine_type=r.get("cuisine_type"),
-            is_active=r.get("is_active", True),
-            rating=r.get("rating", 0),
-            location=r.get("location", {}).get("coordinates") if isinstance(r.get("location"), dict) else r.get("location"),
-            created_at=r["created_at"]
-        ) for r in restaurants
-    ]
-
-@api_router.get("/restaurants/{restaurant_id}", response_model=RestaurantResponse)
-async def get_restaurant(restaurant_id: str):
-    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
-    if not restaurant:
-        raise HTTPException(status_code=404, detail="Restaurant not found")
-    return RestaurantResponse(
-        id=restaurant["id"],
-        name=restaurant["name"],
-        description=restaurant.get("description"),
-        address=restaurant["address"],
-        phone=restaurant["phone"],
-        image_url=restaurant.get("image_url"),
-        cuisine_type=restaurant.get("cuisine_type"),
-        is_active=restaurant.get("is_active", True),
-        rating=restaurant.get("rating", 0),
-        location=restaurant.get("location", {}).get("coordinates") if isinstance(restaurant.get("location"), dict) else restaurant.get("location"),
-        created_at=restaurant["created_at"]
-    )
-
-@api_router.put("/restaurants/{restaurant_id}", response_model=RestaurantResponse)
-async def update_restaurant(restaurant_id: str, restaurant: RestaurantCreate, admin: dict = Depends(require_admin)):
-    update_doc = restaurant.model_dump()
-    if restaurant.location:
-        update_doc["location"] = {"type": "Point", "coordinates": restaurant.location}
-    
-    result = await db.restaurants.find_one_and_update(
-        {"id": restaurant_id},
-        {"$set": update_doc},
-        return_document=True
-    )
-    
-    if not result:
-        raise HTTPException(status_code=404, detail="Restaurant not found")
-    
-    return RestaurantResponse(
-        id=result["id"],
-        name=result["name"],
-        description=result.get("description"),
-        address=result["address"],
-        phone=result["phone"],
-        image_url=result.get("image_url"),
-        cuisine_type=result.get("cuisine_type"),
-        is_active=result.get("is_active", True),
-        rating=result.get("rating", 0),
-        location=result.get("location", {}).get("coordinates") if isinstance(result.get("location"), dict) else result.get("location"),
-        created_at=result["created_at"]
-    )
-
-@api_router.delete("/restaurants/{restaurant_id}")
-async def delete_restaurant(restaurant_id: str, admin: dict = Depends(require_admin)):
-    result = await db.restaurants.delete_one({"id": restaurant_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Restaurant not found")
-    return {"message": "Restaurant deleted successfully"}
-
-# ===================== MENU ITEMS ROUTES =====================
-
-@api_router.post("/menu-items", response_model=MenuItemResponse)
-async def create_menu_item(item: MenuItemCreate, admin: dict = Depends(require_admin)):
-    item_id = str(uuid.uuid4())
-    item_doc = {
-        "id": item_id,
-        **item.model_dump(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.menu_items.insert_one(item_doc)
-    return MenuItemResponse(id=item_id, **item.model_dump(), created_at=item_doc["created_at"])
-
-@api_router.get("/menu-items", response_model=List[MenuItemResponse])
-async def get_menu_items(restaurant_id: Optional[str] = None, category: Optional[str] = None):
-    query = {}
-    if restaurant_id:
-        query["restaurant_id"] = restaurant_id
-    if category:
-        query["category"] = category
-    
-    items = await db.menu_items.find(query, {"_id": 0}).to_list(500)
-    return [MenuItemResponse(**item) for item in items]
-
-@api_router.put("/menu-items/{item_id}", response_model=MenuItemResponse)
-async def update_menu_item(item_id: str, item: MenuItemCreate, admin: dict = Depends(require_admin)):
-    result = await db.menu_items.find_one_and_update(
-        {"id": item_id},
-        {"$set": item.model_dump()},
-        return_document=True
-    )
-    if not result:
-        raise HTTPException(status_code=404, detail="Menu item not found")
-    return MenuItemResponse(**serialize_doc(result))
-
-@api_router.delete("/menu-items/{item_id}")
-async def delete_menu_item(item_id: str, admin: dict = Depends(require_admin)):
-    result = await db.menu_items.delete_one({"id": item_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Menu item not found")
-    return {"message": "Menu item deleted successfully"}
-
-# ===================== ORDERS ROUTES =====================
-
-@api_router.post("/orders", response_model=OrderResponse)
-async def create_order(order: OrderCreate):
-    order_id = str(uuid.uuid4())
-    
-    # Calculate total
-    total_amount = sum(item.price * item.quantity for item in order.items)
-    
-    # Get delivery fee from zone if location provided
-    delivery_fee = 0.0
-    if order.delivery_location:
-        zones = await db.delivery_zones.find({
+    # Find zone based on location
+    zone_id = None
+    zone_name = None
+    if customer.location:
+        zone = await db.zones.find_one({
             "is_active": True,
             "polygon": {
                 "$geoIntersects": {
-                    "$geometry": {"type": "Point", "coordinates": order.delivery_location}
+                    "$geometry": {"type": "Point", "coordinates": customer.location}
                 }
             }
-        }, {"_id": 0}).to_list(1)
-        if zones:
-            delivery_fee = zones[0].get("delivery_fee", 0)
+        }, {"_id": 0})
+        if zone:
+            zone_id = zone["id"]
+            zone_name = zone["name"]
     
-    # Get customer and restaurant names
-    customer = await db.users.find_one({"id": order.customer_id}, {"_id": 0})
-    restaurant = await db.restaurants.find_one({"id": order.restaurant_id}, {"_id": 0})
-    
-    now = datetime.now(timezone.utc).isoformat()
-    order_doc = {
-        "id": order_id,
-        "customer_id": order.customer_id,
-        "customer_name": customer["name"] if customer else None,
-        "restaurant_id": order.restaurant_id,
-        "restaurant_name": restaurant["name"] if restaurant else None,
-        "items": [item.model_dump() for item in order.items],
-        "total_amount": total_amount,
-        "delivery_fee": delivery_fee,
-        "delivery_address": order.delivery_address,
-        "delivery_location": order.delivery_location,
-        "status": "pending",
-        "delivery_boy_id": None,
-        "delivery_boy_name": None,
-        "notes": order.notes,
-        "created_at": now,
-        "updated_at": now
+    customer_doc = {
+        "id": customer_uuid,
+        "customer_id": customer_id,
+        "name": customer.name,
+        "mobile": customer.mobile,
+        "password_hash": hash_password(customer.password),
+        "address": customer.address,
+        "location": customer.location,
+        "zone_id": zone_id,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
     }
+    await db.customers.insert_one(customer_doc)
     
-    await db.orders.insert_one(order_doc)
-    return OrderResponse(**serialize_doc(order_doc))
+    return CustomerResponse(
+        id=customer_uuid,
+        customer_id=customer_id,
+        name=customer.name,
+        mobile=customer.mobile,
+        address=customer.address,
+        zone_id=zone_id,
+        zone_name=zone_name,
+        is_active=True,
+        created_at=customer_doc["created_at"]
+    )
+
+@api_router.get("/customers", response_model=List[CustomerResponse])
+async def get_customers(admin: dict = Depends(require_admin)):
+    customers = await db.customers.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
+    
+    result = []
+    for c in customers:
+        zone_name = None
+        if c.get("zone_id"):
+            zone = await db.zones.find_one({"id": c["zone_id"]}, {"_id": 0})
+            zone_name = zone["name"] if zone else None
+        
+        result.append(CustomerResponse(
+            id=c["id"],
+            customer_id=c["customer_id"],
+            name=c["name"],
+            mobile=c["mobile"],
+            address=c["address"],
+            zone_id=c.get("zone_id"),
+            zone_name=zone_name,
+            is_active=c.get("is_active", True),
+            created_at=c["created_at"]
+        ))
+    
+    return result
+
+# ===================== SUBSCRIPTION MANAGEMENT =====================
+
+@api_router.post("/subscriptions", response_model=SubscriptionResponse)
+async def create_subscription(sub: SubscriptionCreate, admin: dict = Depends(require_admin)):
+    # Verify customer and plan exist
+    customer = await db.customers.find_one({"id": sub.customer_id}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=400, detail="Customer not found")
+    
+    plan = await db.plans.find_one({"id": sub.plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(status_code=400, detail="Plan not found")
+    
+    combo = await db.combos.find_one({"id": plan["combo_id"]}, {"_id": 0})
+    
+    sub_id = str(uuid.uuid4())
+    start_date = datetime.now(timezone.utc)
+    end_date = start_date + timedelta(days=plan["validity_days"])
+    
+    sub_doc = {
+        "id": sub_id,
+        "customer_id": sub.customer_id,
+        "plan_id": sub.plan_id,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "is_active": True,
+        "is_paused": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.subscriptions.insert_one(sub_doc)
+    
+    return SubscriptionResponse(
+        id=sub_id,
+        customer_id=sub.customer_id,
+        customer_name=customer["name"],
+        plan_id=sub.plan_id,
+        plan_name=plan["name"],
+        combo_name=combo["name"] if combo else None,
+        start_date=sub_doc["start_date"],
+        end_date=sub_doc["end_date"],
+        is_active=True,
+        is_paused=False,
+        created_at=sub_doc["created_at"]
+    )
+
+@api_router.get("/subscriptions", response_model=List[SubscriptionResponse])
+async def get_subscriptions(active_only: bool = False, admin: dict = Depends(require_admin)):
+    query = {"is_active": True} if active_only else {}
+    subs = await db.subscriptions.find(query, {"_id": 0}).to_list(500)
+    
+    result = []
+    for s in subs:
+        customer = await db.customers.find_one({"id": s["customer_id"]}, {"_id": 0})
+        plan = await db.plans.find_one({"id": s["plan_id"]}, {"_id": 0})
+        combo = None
+        if plan:
+            combo = await db.combos.find_one({"id": plan["combo_id"]}, {"_id": 0})
+        
+        result.append(SubscriptionResponse(
+            id=s["id"],
+            customer_id=s["customer_id"],
+            customer_name=customer["name"] if customer else None,
+            plan_id=s["plan_id"],
+            plan_name=plan["name"] if plan else None,
+            combo_name=combo["name"] if combo else None,
+            start_date=s["start_date"],
+            end_date=s["end_date"],
+            is_active=s.get("is_active", True),
+            is_paused=s.get("is_paused", False),
+            created_at=s["created_at"]
+        ))
+    
+    return result
+
+@api_router.put("/subscriptions/{sub_id}/pause")
+async def pause_subscription(sub_id: str, admin: dict = Depends(require_admin)):
+    result = await db.subscriptions.find_one_and_update(
+        {"id": sub_id},
+        {"$set": {"is_paused": True}},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return {"message": "Subscription paused"}
+
+@api_router.put("/subscriptions/{sub_id}/resume")
+async def resume_subscription(sub_id: str, admin: dict = Depends(require_admin)):
+    result = await db.subscriptions.find_one_and_update(
+        {"id": sub_id},
+        {"$set": {"is_paused": False}},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return {"message": "Subscription resumed"}
+
+# ===================== ORDER GENERATION ENGINE =====================
+
+@api_router.post("/orders/generate")
+async def generate_orders(meal_type: str = Query(..., enum=["breakfast", "lunch", "dinner"]), admin: dict = Depends(require_admin)):
+    """Manually generate orders for a specific meal type"""
+    today = get_today_date()
+    day_name = get_day_name()
+    
+    # Check if orders already generated for this meal today
+    existing = await db.orders.find_one({
+        "order_date": today,
+        "meal_type": meal_type
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail=f"{meal_type.capitalize()} orders already generated for today")
+    
+    # Get active, non-paused subscriptions
+    subs = await db.subscriptions.find({
+        "is_active": True,
+        "is_paused": False,
+        "start_date": {"$lte": datetime.now(timezone.utc).isoformat()},
+        "end_date": {"$gte": datetime.now(timezone.utc).isoformat()}
+    }, {"_id": 0}).to_list(1000)
+    
+    orders_created = 0
+    
+    for sub in subs:
+        plan = await db.plans.find_one({"id": sub["plan_id"]}, {"_id": 0})
+        if not plan:
+            continue
+        
+        # Check if this plan has this meal type on this day
+        schedule = plan.get("schedule", [])
+        day_schedule = next((s for s in schedule if s["day"] == day_name), None)
+        
+        if not day_schedule or meal_type not in day_schedule.get("meals", []):
+            continue
+        
+        customer = await db.customers.find_one({"id": sub["customer_id"]}, {"_id": 0})
+        if not customer:
+            continue
+        
+        combo = await db.combos.find_one({"id": plan["combo_id"]}, {"_id": 0})
+        zone = None
+        if customer.get("zone_id"):
+            zone = await db.zones.find_one({"id": customer["zone_id"]}, {"_id": 0})
+        
+        # Get assigned delivery boy for zone
+        delivery_boy_id = None
+        delivery_boy_name = None
+        if zone and zone.get("assigned_delivery_boys"):
+            boy = await db.users.find_one({
+                "id": {"$in": zone["assigned_delivery_boys"]},
+                "is_active": True
+            }, {"_id": 0})
+            if boy:
+                delivery_boy_id = boy["id"]
+                delivery_boy_name = boy["name"]
+        
+        order_doc = {
+            "id": str(uuid.uuid4()),
+            "subscription_id": sub["id"],
+            "customer_id": customer["id"],
+            "customer_name": customer["name"],
+            "customer_address": customer["address"],
+            "customer_mobile": customer["mobile"],
+            "zone_id": customer.get("zone_id"),
+            "zone_name": zone["name"] if zone else None,
+            "combo_id": plan["combo_id"],
+            "combo_name": combo["name"] if combo else None,
+            "plan_name": plan["name"],
+            "meal_type": meal_type,
+            "status": "pending",
+            "delivery_boy_id": delivery_boy_id,
+            "delivery_boy_name": delivery_boy_name,
+            "order_date": today,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.orders.insert_one(order_doc)
+        orders_created += 1
+    
+    return {"message": f"Generated {orders_created} {meal_type} orders for {day_name}"}
 
 @api_router.get("/orders", response_model=List[OrderResponse])
-async def get_orders(status: Optional[str] = None, limit: int = 50):
+async def get_orders(
+    meal_type: Optional[str] = None,
+    status: Optional[str] = None,
+    zone_id: Optional[str] = None,
+    date: Optional[str] = None,
+    admin: dict = Depends(require_admin)
+):
     query = {}
+    if meal_type:
+        query["meal_type"] = meal_type
     if status:
         query["status"] = status
+    if zone_id:
+        query["zone_id"] = zone_id
+    if date:
+        query["order_date"] = date
+    else:
+        query["order_date"] = get_today_date()
     
-    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [OrderResponse(**order) for order in orders]
 
-@api_router.get("/orders/{order_id}", response_model=OrderResponse)
-async def get_order(order_id: str):
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return OrderResponse(**order)
-
 @api_router.put("/orders/{order_id}/status", response_model=OrderResponse)
-async def update_order_status(order_id: str, update: OrderStatusUpdate, admin: dict = Depends(require_admin)):
-    update_doc = {
-        "status": update.status,
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
+async def update_order_status(order_id: str, update: OrderStatusUpdate, current_user: dict = Depends(get_current_user)):
+    update_doc = {"status": update.status}
     
     if update.delivery_boy_id:
-        delivery_boy = await db.users.find_one({"id": update.delivery_boy_id, "role": "delivery_boy"}, {"_id": 0})
-        if delivery_boy:
+        boy = await db.users.find_one({"id": update.delivery_boy_id}, {"_id": 0})
+        if boy:
             update_doc["delivery_boy_id"] = update.delivery_boy_id
-            update_doc["delivery_boy_name"] = delivery_boy["name"]
+            update_doc["delivery_boy_name"] = boy["name"]
     
     result = await db.orders.find_one_and_update(
         {"id": order_id},
@@ -622,148 +885,131 @@ async def update_order_status(order_id: str, update: OrderStatusUpdate, admin: d
     if not result:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    return OrderResponse(**serialize_doc(result))
+    return OrderResponse(**{k: v for k, v in result.items() if k != "_id"})
 
-# ===================== DELIVERY BOYS ROUTES =====================
-
-@api_router.post("/delivery-boys", response_model=DeliveryBoyResponse)
-async def create_delivery_boy(boy: DeliveryBoyCreate, admin: dict = Depends(require_admin)):
-    existing = await db.users.find_one({"email": boy.email})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+@api_router.get("/orders/zone-summary")
+async def get_zone_order_summary(meal_type: str = Query(..., enum=["breakfast", "lunch", "dinner"]), admin: dict = Depends(require_admin)):
+    """Get zone-wise order summary for a meal type"""
+    today = get_today_date()
     
-    user_id = str(uuid.uuid4())
-    user_doc = {
-        "id": user_id,
-        "email": boy.email,
-        "name": boy.name,
-        "phone": boy.phone,
-        "role": "delivery_boy",
-        "password_hash": hash_password(boy.password),
-        "vehicle_type": boy.vehicle_type,
-        "vehicle_number": boy.vehicle_number,
-        "is_active": True,
-        "is_available": True,
-        "current_location": None,
-        "total_deliveries": 0,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.users.insert_one(user_doc)
+    pipeline = [
+        {"$match": {"order_date": today, "meal_type": meal_type}},
+        {"$group": {
+            "_id": {"zone_id": "$zone_id", "zone_name": "$zone_name", "combo_name": "$combo_name"},
+            "count": {"$sum": 1}
+        }},
+        {"$group": {
+            "_id": {"zone_id": "$_id.zone_id", "zone_name": "$_id.zone_name"},
+            "combos": {"$push": {"combo_name": "$_id.combo_name", "count": "$count"}}
+        }}
+    ]
     
-    return DeliveryBoyResponse(
-        id=user_id,
-        email=boy.email,
-        name=boy.name,
-        phone=boy.phone,
-        vehicle_type=boy.vehicle_type,
-        vehicle_number=boy.vehicle_number,
-        is_active=True,
-        is_available=True,
-        current_location=None,
-        total_deliveries=0,
-        created_at=user_doc["created_at"]
-    )
-
-@api_router.get("/delivery-boys", response_model=List[DeliveryBoyResponse])
-async def get_delivery_boys(available_only: bool = False):
-    query = {"role": "delivery_boy"}
-    if available_only:
-        query["is_available"] = True
+    results = await db.orders.aggregate(pipeline).to_list(100)
     
-    boys = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(100)
     return [
-        DeliveryBoyResponse(
-            id=b["id"],
-            email=b["email"],
-            name=b["name"],
-            phone=b["phone"],
-            vehicle_type=b.get("vehicle_type"),
-            vehicle_number=b.get("vehicle_number"),
-            is_active=b.get("is_active", True),
-            is_available=b.get("is_available", True),
-            current_location=b.get("current_location"),
-            total_deliveries=b.get("total_deliveries", 0),
-            created_at=b["created_at"]
-        ) for b in boys
+        {
+            "zone_id": r["_id"]["zone_id"],
+            "zone_name": r["_id"]["zone_name"] or "Unassigned",
+            "meal_type": meal_type,
+            "combos": r["combos"]
+        } for r in results
     ]
 
-@api_router.put("/delivery-boys/{boy_id}/availability")
-async def update_delivery_boy_availability(boy_id: str, is_available: bool, admin: dict = Depends(require_admin)):
-    result = await db.users.find_one_and_update(
-        {"id": boy_id, "role": "delivery_boy"},
-        {"$set": {"is_available": is_available}},
-        return_document=True
+# ===================== SETTINGS =====================
+
+@api_router.get("/settings", response_model=SettingsResponse)
+async def get_settings(admin: dict = Depends(require_admin)):
+    settings = await db.settings.find_one({"type": "app_settings"}, {"_id": 0})
+    if not settings:
+        # Return defaults
+        return SettingsResponse(
+            meal_timings=MealTimings(),
+            help_number=""
+        )
+    return SettingsResponse(
+        meal_timings=MealTimings(**settings.get("meal_timings", {})),
+        help_number=settings.get("help_number", "")
     )
-    if not result:
-        raise HTTPException(status_code=404, detail="Delivery boy not found")
-    return {"message": "Availability updated"}
 
-@api_router.delete("/delivery-boys/{boy_id}")
-async def delete_delivery_boy(boy_id: str, admin: dict = Depends(require_admin)):
-    result = await db.users.delete_one({"id": boy_id, "role": "delivery_boy"})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Delivery boy not found")
-    return {"message": "Delivery boy deleted successfully"}
+@api_router.put("/settings", response_model=SettingsResponse)
+async def update_settings(settings: SettingsUpdate, admin: dict = Depends(require_admin)):
+    update_doc = {}
+    if settings.meal_timings:
+        update_doc["meal_timings"] = settings.meal_timings.model_dump()
+    if settings.help_number is not None:
+        update_doc["help_number"] = settings.help_number
+    
+    await db.settings.update_one(
+        {"type": "app_settings"},
+        {"$set": update_doc},
+        upsert=True
+    )
+    
+    return await get_settings(admin)
 
-# ===================== CUSTOMERS ROUTES =====================
-
-@api_router.get("/customers", response_model=List[UserResponse])
-async def get_customers(admin: dict = Depends(require_admin)):
-    customers = await db.users.find({"role": "customer"}, {"_id": 0, "password_hash": 0}).to_list(100)
-    return [
-        UserResponse(
-            id=c["id"],
-            email=c["email"],
-            name=c["name"],
-            phone=c.get("phone"),
-            role=c["role"],
-            created_at=c["created_at"],
-            is_active=c.get("is_active", True)
-        ) for c in customers
-    ]
-
-# ===================== DASHBOARD ROUTES =====================
+# ===================== DASHBOARD =====================
 
 @api_router.get("/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(admin: dict = Depends(require_admin)):
-    total_orders = await db.orders.count_documents({})
-    pending_orders = await db.orders.count_documents({"status": "pending"})
-    active_deliveries = await db.orders.count_documents({"status": "out_for_delivery"})
+    today = get_today_date()
     
-    # Calculate total revenue
-    revenue_pipeline = [
-        {"$match": {"status": {"$in": ["delivered", "confirmed", "preparing", "out_for_delivery"]}}},
-        {"$group": {"_id": None, "total": {"$sum": {"$add": ["$total_amount", "$delivery_fee"]}}}}
-    ]
-    revenue_result = await db.orders.aggregate(revenue_pipeline).to_list(1)
-    total_revenue = revenue_result[0]["total"] if revenue_result else 0
+    total_active_customers = await db.subscriptions.count_documents({"is_active": True, "is_paused": False})
+    total_orders_today = await db.orders.count_documents({"order_date": today})
+    total_delivery_boys = await db.users.count_documents({"role": "delivery_boy", "is_active": True})
     
-    total_restaurants = await db.restaurants.count_documents({})
-    total_delivery_boys = await db.users.count_documents({"role": "delivery_boy"})
-    total_customers = await db.users.count_documents({"role": "customer"})
-    total_zones = await db.delivery_zones.count_documents({})
+    breakfast_orders = await db.orders.count_documents({"order_date": today, "meal_type": "breakfast"})
+    lunch_orders = await db.orders.count_documents({"order_date": today, "meal_type": "lunch"})
+    dinner_orders = await db.orders.count_documents({"order_date": today, "meal_type": "dinner"})
+    
+    delivered_today = await db.orders.count_documents({"order_date": today, "status": "delivered"})
+    pending_today = await db.orders.count_documents({"order_date": today, "status": {"$ne": "delivered"}})
     
     return DashboardStats(
-        total_orders=total_orders,
-        pending_orders=pending_orders,
-        active_deliveries=active_deliveries,
-        total_revenue=total_revenue,
-        total_restaurants=total_restaurants,
+        total_active_customers=total_active_customers,
+        total_orders_today=total_orders_today,
         total_delivery_boys=total_delivery_boys,
-        total_customers=total_customers,
-        total_zones=total_zones
+        breakfast_orders=breakfast_orders,
+        lunch_orders=lunch_orders,
+        dinner_orders=dinner_orders,
+        delivered_today=delivered_today,
+        pending_today=pending_today
     )
 
-@api_router.get("/dashboard/recent-orders", response_model=List[OrderResponse])
-async def get_recent_orders(admin: dict = Depends(require_admin)):
-    orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(10)
-    return [OrderResponse(**order) for order in orders]
+# ===================== CLOUDINARY UPLOAD =====================
+
+@api_router.get("/cloudinary/signature")
+async def get_cloudinary_signature(
+    folder: str = "plans",
+    admin: dict = Depends(require_admin)
+):
+    """Generate signed upload params for Cloudinary"""
+    if not os.environ.get("CLOUDINARY_API_SECRET"):
+        raise HTTPException(status_code=500, detail="Cloudinary not configured")
+    
+    timestamp = int(time_module.time())
+    params = {
+        "timestamp": timestamp,
+        "folder": folder
+    }
+    
+    signature = cloudinary.utils.api_sign_request(
+        params,
+        os.environ.get("CLOUDINARY_API_SECRET")
+    )
+    
+    return {
+        "signature": signature,
+        "timestamp": timestamp,
+        "cloud_name": os.environ.get("CLOUDINARY_CLOUD_NAME"),
+        "api_key": os.environ.get("CLOUDINARY_API_KEY"),
+        "folder": folder
+    }
 
 # ===================== HEALTH CHECK =====================
 
 @api_router.get("/")
 async def root():
-    return {"message": "ZoneBite API is running", "version": "1.0.0"}
+    return {"message": "ZoneBite Subscription API is running", "version": "2.0.0"}
 
 @api_router.get("/health")
 async def health():
@@ -784,13 +1030,31 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_db_indexes():
     try:
-        await db.delivery_zones.create_index([("polygon", "2dsphere")])
-        await db.restaurants.create_index([("location", "2dsphere")])
-        await db.users.create_index("email", unique=True)
-        await db.orders.create_index([("created_at", -1)])
+        await db.zones.create_index([("polygon", "2dsphere")])
+        await db.users.create_index("login_id", unique=True)
+        await db.customers.create_index("customer_id", unique=True)
+        await db.orders.create_index([("order_date", -1), ("meal_type", 1)])
+        
+        # Create default admin if not exists
+        admin = await db.users.find_one({"login_id": "admin"})
+        if not admin:
+            admin_doc = {
+                "id": str(uuid.uuid4()),
+                "name": "Admin",
+                "mobile": "0000000000",
+                "login_id": "admin",
+                "password_hash": hash_password("admin123"),
+                "role": "admin",
+                "is_active": True,
+                "assigned_zones": [],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.users.insert_one(admin_doc)
+            logger.info("Default admin created: admin / admin123")
+        
         logger.info("Database indexes created successfully")
     except Exception as e:
-        logger.warning(f"Index creation warning: {e}")
+        logger.warning(f"Startup warning: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
