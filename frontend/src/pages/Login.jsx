@@ -80,23 +80,23 @@ const Login = () => {
                 className="w-20 h-20 object-contain"
               />
             </div>
-            <h1 className="text-4xl font-black tracking-tight text-orange-100">EATWEL</h1>
-            <p className="text-orange-300/80 font-medium text-sm mt-1">
+            <h1 className="text-4xl font-black tracking-tight text-white">EATWEL</h1>
+            <p className="text-white/80 font-medium text-sm mt-1">
               Stay Healthy
             </p>
           </div>
 
-          <Card className="bg-black/40 backdrop-blur-xl border-orange-500/20 shadow-2xl animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <Card className="bg-white/95 backdrop-blur-xl border-orange-200 shadow-2xl animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <CardHeader className="space-y-1 pb-4">
-              <CardTitle className="text-2xl font-bold text-orange-100">Admin Login</CardTitle>
-              <CardDescription className="text-orange-200/60">
+              <CardTitle className="text-2xl font-bold text-orange-900">Admin Login</CardTitle>
+              <CardDescription className="text-orange-700/70">
                 Enter your credentials to access the admin panel
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="loginId" className="text-orange-200">Login ID</Label>
+                  <Label htmlFor="loginId" className="text-orange-800">Login ID</Label>
                   <Input
                     id="loginId"
                     name="loginId"
@@ -105,12 +105,12 @@ const Login = () => {
                     value={formData.loginId}
                     onChange={handleChange}
                     required
-                    className="bg-orange-950/50 border-orange-500/30 text-orange-100 placeholder:text-orange-300/40 focus:border-orange-400 focus:ring-orange-400/20"
+                    className="bg-orange-50 border-orange-200 text-orange-900 placeholder:text-orange-400 focus:border-orange-500 focus:ring-orange-500/20"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-orange-200">Password</Label>
+                  <Label htmlFor="password" className="text-orange-800">Password</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -121,12 +121,12 @@ const Login = () => {
                       value={formData.password}
                       onChange={handleChange}
                       required
-                      className="bg-orange-950/50 border-orange-500/30 text-orange-100 placeholder:text-orange-300/40 focus:border-orange-400 focus:ring-orange-400/20 pr-10"
+                      className="bg-orange-50 border-orange-200 text-orange-900 placeholder:text-orange-400 focus:border-orange-500 focus:ring-orange-500/20 pr-10"
                     />
                     <button
                       type="button"
                       data-testid="toggle-password-btn"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-300/60 hover:text-orange-200"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-500 hover:text-orange-700"
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -137,7 +137,7 @@ const Login = () => {
                 <Button
                   type="submit"
                   data-testid="submit-btn"
-                  className="w-full h-11 font-bold tracking-wide uppercase bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/30"
+                  className="w-full h-11 font-bold tracking-wide uppercase bg-orange-600 hover:bg-orange-700 text-white shadow-lg"
                   disabled={loading}
                 >
                   {loading ? (
