@@ -1234,6 +1234,191 @@ async def get_customer_app_settings():
         "help_number": settings.get("help_number", "") if settings else ""
     }
 
+# ===================== DELIVERY BOY APP APIs =====================
+
+@api_router.post("/delivery-boy/login")
+async def delivery_boy_login(credentials: UserLogin):
+    """Delivery Boy login with Login ID and Password"""
+    user = await db.users.find_one({"login_id": credentials.login_id, "role": "delivery_boy"}, {"_id": 0})
+    if not user or not verify_password(credentials.password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid Login ID or Password")
+    
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=401, detail="Account is deactivated")
+    
+    token = create_token(user["id"], credentials.login_id, "delivery_boy")
+    
+    # Get assigned zone names
+    zone_names = []
+    if user.get("assigned_zones"):
+        zones = await db.zones.find({"id": {"$in": user["assigned_zones"]}}, {"_id": 0}).to_list(100)
+        zone_names = [z["name"] for z in zones]
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "delivery_boy": {
+            "id": user["id"],
+            "name": user["name"],
+            "mobile": user["mobile"],
+            "login_id": user["login_id"],
+            "is_active": user.get("is_active", True),
+            "assigned_zones": user.get("assigned_zones", []),
+            "assigned_zone_names": zone_names,
+            "created_at": user["created_at"]
+        }
+    }
+
+@api_router.get("/delivery-boy/profile")
+async def get_delivery_boy_profile(current_user: dict = Depends(get_current_user)):
+    """Get delivery boy profile"""
+    if current_user.get("role") != "delivery_boy":
+        raise HTTPException(status_code=403, detail="Delivery boy access only")
+    
+    # Get assigned zone names
+    zone_names = []
+    if current_user.get("assigned_zones"):
+        zones = await db.zones.find({"id": {"$in": current_user["assigned_zones"]}}, {"_id": 0}).to_list(100)
+        zone_names = [z["name"] for z in zones]
+    
+    return {
+        "id": current_user["id"],
+        "name": current_user["name"],
+        "mobile": current_user["mobile"],
+        "login_id": current_user["login_id"],
+        "is_active": current_user.get("is_active", True),
+        "assigned_zones": current_user.get("assigned_zones", []),
+        "assigned_zone_names": zone_names,
+        "created_at": current_user["created_at"]
+    }
+
+@api_router.get("/delivery-boy/orders")
+async def get_delivery_boy_orders(
+    meal_type: Optional[str] = Query(None, enum=["breakfast", "lunch", "dinner"]),
+    status: Optional[str] = Query(None, enum=["pending", "packed", "out_for_delivery", "delivered"]),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get orders for delivery boy's assigned zones"""
+    if current_user.get("role") != "delivery_boy":
+        raise HTTPException(status_code=403, detail="Delivery boy access only")
+    
+    assigned_zones = current_user.get("assigned_zones", [])
+    if not assigned_zones:
+        return []
+    
+    # Build query for assigned zones only
+    query = {
+        "zone_id": {"$in": assigned_zones},
+        "order_date": get_today_date()
+    }
+    
+    if meal_type:
+        query["meal_type"] = meal_type
+    
+    if status:
+        query["status"] = status
+    
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # Return only necessary fields (no price/combo modification data)
+    result = []
+    for order in orders:
+        result.append({
+            "id": order["id"],
+            "customer_name": order.get("customer_name"),
+            "customer_address": order.get("customer_address"),
+            "customer_mobile": order.get("customer_mobile"),
+            "zone_name": order.get("zone_name"),
+            "combo_name": order.get("combo_name"),
+            "meal_type": order.get("meal_type"),
+            "status": order.get("status"),
+            "order_date": order.get("order_date"),
+            "created_at": order.get("created_at")
+        })
+    
+    return result
+
+@api_router.get("/delivery-boy/orders/summary")
+async def get_delivery_boy_order_summary(current_user: dict = Depends(get_current_user)):
+    """Get order count summary for delivery boy"""
+    if current_user.get("role") != "delivery_boy":
+        raise HTTPException(status_code=403, detail="Delivery boy access only")
+    
+    assigned_zones = current_user.get("assigned_zones", [])
+    if not assigned_zones:
+        return {
+            "breakfast": {"total": 0, "pending": 0, "out_for_delivery": 0, "delivered": 0},
+            "lunch": {"total": 0, "pending": 0, "out_for_delivery": 0, "delivered": 0},
+            "dinner": {"total": 0, "pending": 0, "out_for_delivery": 0, "delivered": 0}
+        }
+    
+    today = get_today_date()
+    base_query = {"zone_id": {"$in": assigned_zones}, "order_date": today}
+    
+    summary = {}
+    for meal in ["breakfast", "lunch", "dinner"]:
+        meal_query = {**base_query, "meal_type": meal}
+        total = await db.orders.count_documents(meal_query)
+        pending = await db.orders.count_documents({**meal_query, "status": {"$in": ["pending", "packed"]}})
+        out_for_delivery = await db.orders.count_documents({**meal_query, "status": "out_for_delivery"})
+        delivered = await db.orders.count_documents({**meal_query, "status": "delivered"})
+        
+        summary[meal] = {
+            "total": total,
+            "pending": pending,
+            "out_for_delivery": out_for_delivery,
+            "delivered": delivered
+        }
+    
+    return summary
+
+@api_router.put("/delivery-boy/orders/{order_id}/status")
+async def update_order_status_by_delivery_boy(
+    order_id: str,
+    status: str = Query(..., enum=["out_for_delivery", "delivered"]),
+    current_user: dict = Depends(get_current_user)
+):
+    """Update order status by delivery boy (only out_for_delivery or delivered)"""
+    if current_user.get("role") != "delivery_boy":
+        raise HTTPException(status_code=403, detail="Delivery boy access only")
+    
+    assigned_zones = current_user.get("assigned_zones", [])
+    
+    # Verify order belongs to delivery boy's assigned zone
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order.get("zone_id") not in assigned_zones:
+        raise HTTPException(status_code=403, detail="Order not in your assigned zone")
+    
+    # Update status and assign delivery boy
+    update_doc = {
+        "status": status,
+        "delivery_boy_id": current_user["id"],
+        "delivery_boy_name": current_user["name"]
+    }
+    
+    result = await db.orders.find_one_and_update(
+        {"id": order_id},
+        {"$set": update_doc},
+        return_document=True
+    )
+    
+    return {
+        "message": f"Order marked as {status.replace('_', ' ')}",
+        "order_id": order_id,
+        "status": status
+    }
+
+@api_router.get("/delivery-boy/settings")
+async def get_delivery_boy_app_settings():
+    """Get app settings for delivery boy (help number)"""
+    settings = await db.settings.find_one({"type": "app_settings"}, {"_id": 0})
+    return {
+        "help_number": settings.get("help_number", "") if settings else ""
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
