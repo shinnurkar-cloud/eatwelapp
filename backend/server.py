@@ -273,6 +273,157 @@ def get_today_date():
 def get_day_name():
     return datetime.now(timezone.utc).strftime("%A")
 
+# ===================== GEO-FENCING HELPERS =====================
+
+def point_in_polygon(point: List[float], polygon: List[List[float]]) -> bool:
+    """
+    Ray casting algorithm to check if a point is inside a polygon.
+    point: [lng, lat]
+    polygon: [[lng, lat], [lng, lat], ...] - closed polygon (first == last)
+    """
+    if not polygon or len(polygon) < 3:
+        return False
+    
+    x, y = point[0], point[1]
+    n = len(polygon)
+    inside = False
+    
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i][0], polygon[i][1]
+        xj, yj = polygon[j][0], polygon[j][1]
+        
+        if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    
+    return inside
+
+def haversine_distance(coord1: List[float], coord2: List[float]) -> float:
+    """
+    Calculate the great circle distance between two points in kilometers.
+    coord1, coord2: [lng, lat]
+    """
+    R = 6371  # Earth's radius in km
+    
+    lng1, lat1 = math.radians(coord1[0]), math.radians(coord1[1])
+    lng2, lat2 = math.radians(coord2[0]), math.radians(coord2[1])
+    
+    dlng = lng2 - lng1
+    dlat = lat2 - lat1
+    
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    
+    return R * c
+
+async def find_zone_for_location(location: List[float]) -> Optional[dict]:
+    """Find which zone contains the given location."""
+    zones = await db.zones.find({"is_active": True}, {"_id": 0}).to_list(100)
+    
+    for zone in zones:
+        polygon_data = zone.get("polygon", {})
+        if isinstance(polygon_data, dict) and "coordinates" in polygon_data:
+            polygon = polygon_data["coordinates"][0]
+        else:
+            polygon = polygon_data
+        
+        if polygon and point_in_polygon(location, polygon):
+            return zone
+    
+    return None
+
+# ===================== AUTOMATIC ORDER GENERATION =====================
+
+async def auto_generate_orders_for_meal(meal_type: str):
+    """Background task to auto-generate orders for a meal type"""
+    logger.info(f"[SCHEDULER] Auto-generating {meal_type} orders...")
+    
+    try:
+        today = get_today_date()
+        day_name = get_day_name()
+        
+        # Check if orders already generated for this meal today
+        existing = await db.orders.find_one({
+            "order_date": today,
+            "meal_type": meal_type
+        })
+        if existing:
+            logger.info(f"[SCHEDULER] {meal_type} orders already generated for {today}")
+            return
+        
+        # Get active, non-paused subscriptions
+        subs = await db.subscriptions.find({
+            "is_active": True,
+            "is_paused": False,
+            "start_date": {"$lte": datetime.now(timezone.utc).isoformat()},
+            "end_date": {"$gte": datetime.now(timezone.utc).isoformat()}
+        }, {"_id": 0}).to_list(1000)
+        
+        orders_created = 0
+        
+        for sub in subs:
+            plan = await db.plans.find_one({"id": sub["plan_id"]}, {"_id": 0})
+            if not plan:
+                continue
+            
+            # Check if this plan has this meal type on this day
+            schedule = plan.get("schedule", [])
+            day_schedule = next((s for s in schedule if s["day"] == day_name), None)
+            
+            if not day_schedule or meal_type not in day_schedule.get("meals", []):
+                continue
+            
+            customer = await db.customers.find_one({"id": sub["customer_id"]}, {"_id": 0})
+            if not customer:
+                continue
+            
+            combo = await db.combos.find_one({"id": plan["combo_id"]}, {"_id": 0})
+            zone = None
+            if customer.get("zone_id"):
+                zone = await db.zones.find_one({"id": customer["zone_id"]}, {"_id": 0})
+            
+            # Get assigned delivery boy for zone
+            delivery_boy_id = None
+            delivery_boy_name = None
+            if zone and zone.get("assigned_delivery_boys"):
+                boy = await db.users.find_one({
+                    "id": {"$in": zone["assigned_delivery_boys"]},
+                    "is_active": True
+                }, {"_id": 0})
+                if boy:
+                    delivery_boy_id = boy["id"]
+                    delivery_boy_name = boy["name"]
+            
+            order_doc = {
+                "id": str(uuid.uuid4()),
+                "subscription_id": sub["id"],
+                "customer_id": customer["id"],
+                "customer_name": customer["name"],
+                "customer_address": customer["address"],
+                "customer_mobile": customer["mobile"],
+                "customer_location": customer.get("location"),  # [lng, lat]
+                "zone_id": customer.get("zone_id"),
+                "zone_name": zone["name"] if zone else None,
+                "combo_id": plan["combo_id"],
+                "combo_name": combo["name"] if combo else None,
+                "plan_name": plan["name"],
+                "meal_type": meal_type,
+                "status": "pending",
+                "delivery_boy_id": delivery_boy_id,
+                "delivery_boy_name": delivery_boy_name,
+                "order_date": today,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            await db.orders.insert_one(order_doc)
+            orders_created += 1
+        
+        logger.info(f"[SCHEDULER] Generated {orders_created} {meal_type} orders for {day_name}")
+        
+    except Exception as e:
+        logger.error(f"[SCHEDULER] Error generating {meal_type} orders: {e}")
+
 # ===================== AUTH ROUTES =====================
 
 @api_router.post("/auth/login", response_model=TokenResponse)
