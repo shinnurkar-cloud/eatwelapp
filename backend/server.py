@@ -145,10 +145,20 @@ class CustomerResponse(BaseModel):
     name: str
     mobile: str
     address: str
+    location: Optional[List[float]] = None
     zone_id: Optional[str] = None
     zone_name: Optional[str] = None
     is_active: bool = True
     created_at: str
+
+class CustomerLocationUpdate(BaseModel):
+    location: List[float]  # [lng, lat]
+    address: Optional[str] = None
+
+class CustomerRegister(BaseModel):
+    name: str
+    mobile: str
+    password: str
 
 # Subscription Models
 class SubscriptionCreate(BaseModel):
