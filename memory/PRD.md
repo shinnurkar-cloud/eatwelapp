@@ -119,8 +119,13 @@ Build a subscription-based food delivery application for a single restaurant/clo
    - ETA estimation based on average city speed (20 km/h)
 
 ## What's MOCKED
-- **Google Maps API** - Uses canvas-based polygon drawing in admin panel
 - **Payment Gateway** - Manual subscription activation
+
+## What's INTEGRATED ✅
+- **Google Maps API** - Real map with polygon drawing for zone management
+  - Maps JavaScript API
+  - Geocoding API
+  - Directions API
 
 ## What's READY for Integration
 - **Google Maps API** - Backend provides all coordinates and zone polygons
