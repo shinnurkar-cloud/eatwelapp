@@ -1927,9 +1927,19 @@ async def startup_db_indexes():
         logger.info("Database indexes created successfully")
         
         # Schedule automatic order generation (IST times)
+        # Create wrapper functions for the scheduler
+        async def generate_breakfast_orders():
+            await auto_generate_orders_for_meal("breakfast")
+        
+        async def generate_lunch_orders():
+            await auto_generate_orders_for_meal("lunch")
+        
+        async def generate_dinner_orders():
+            await auto_generate_orders_for_meal("dinner")
+        
         # Breakfast: 3:00 AM IST
         scheduler.add_job(
-            lambda: asyncio.create_task(auto_generate_orders_for_meal("breakfast")),
+            generate_breakfast_orders,
             CronTrigger(hour=3, minute=0, timezone=IST),
             id="breakfast_orders",
             replace_existing=True
@@ -1937,7 +1947,7 @@ async def startup_db_indexes():
         
         # Lunch: 9:10 AM IST
         scheduler.add_job(
-            lambda: asyncio.create_task(auto_generate_orders_for_meal("lunch")),
+            generate_lunch_orders,
             CronTrigger(hour=9, minute=10, timezone=IST),
             id="lunch_orders",
             replace_existing=True
@@ -1945,7 +1955,7 @@ async def startup_db_indexes():
         
         # Dinner: 5:00 PM IST (17:00)
         scheduler.add_job(
-            lambda: asyncio.create_task(auto_generate_orders_for_meal("dinner")),
+            generate_dinner_orders,
             CronTrigger(hour=17, minute=0, timezone=IST),
             id="dinner_orders",
             replace_existing=True
