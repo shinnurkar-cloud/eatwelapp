@@ -186,6 +186,7 @@ class OrderResponse(BaseModel):
     customer_name: Optional[str] = None
     customer_address: Optional[str] = None
     customer_mobile: Optional[str] = None
+    customer_location: Optional[List[float]] = None  # [lng, lat]
     zone_id: Optional[str] = None
     zone_name: Optional[str] = None
     combo_id: str
@@ -202,13 +203,28 @@ class OrderStatusUpdate(BaseModel):
     status: str
     delivery_boy_id: Optional[str] = None
 
+# Delivery Boy Order Response (with route data for mobile app)
+class DeliveryOrderResponse(BaseModel):
+    id: str
+    customer_name: Optional[str] = None
+    customer_address: Optional[str] = None
+    customer_mobile: Optional[str] = None
+    customer_location: Optional[List[float]] = None  # [lng, lat] for Google Maps routing
+    zone_name: Optional[str] = None
+    combo_name: Optional[str] = None
+    meal_type: str
+    status: str
+    order_date: str
+    created_at: str
+    distance_km: Optional[float] = None  # Distance from delivery boy's current position
+
 # Settings Models
 class MealTimings(BaseModel):
     breakfast_start: str = "03:00"
     breakfast_end: str = "09:00"
     lunch_start: str = "09:10"
     lunch_end: str = "15:00"
-    dinner_start: str = "15:10"
+    dinner_start: str = "17:00"  # Updated to 5:00 PM IST
     dinner_end: str = "21:00"
 
 class SettingsUpdate(BaseModel):
