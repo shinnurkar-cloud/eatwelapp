@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 class ZoneBiteV2APITester:
-    def __init__(self, base_url="https://zonebite.preview.emergentagent.com"):
+    def __init__(self, base_url="https://meal-subscribe-1.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.token = None
