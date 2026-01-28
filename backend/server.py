@@ -821,6 +821,7 @@ async def create_customer(customer: CustomerCreate, admin: dict = Depends(requir
         name=customer.name,
         mobile=customer.mobile,
         address=customer.address,
+        location=customer.location,
         zone_id=zone_id,
         zone_name=zone_name,
         is_active=True,
@@ -844,11 +845,14 @@ async def get_customers(admin: dict = Depends(require_admin)):
             name=c["name"],
             mobile=c["mobile"],
             address=c["address"],
+            location=c.get("location"),
             zone_id=c.get("zone_id"),
             zone_name=zone_name,
             is_active=c.get("is_active", True),
             created_at=c["created_at"]
         ))
+    
+    return result
     
     return result
 
