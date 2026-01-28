@@ -1737,6 +1737,141 @@ async def update_order_status_by_delivery_boy(
         "status": status
     }
 
+@api_router.get("/delivery-boy/orders/{order_id}/route")
+async def get_order_route_data(
+    order_id: str,
+    current_location: List[float] = Query(..., description="[longitude, latitude] - delivery boy's current location"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get route data for a specific order.
+    Returns customer location, distance, and ETA estimate.
+    Mobile app uses this to show route on Google Maps.
+    """
+    if current_user.get("role") != "delivery_boy":
+        raise HTTPException(status_code=403, detail="Delivery boy access only")
+    
+    assigned_zones = current_user.get("assigned_zones", [])
+    
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order.get("zone_id") not in assigned_zones:
+        raise HTTPException(status_code=403, detail="Order not in your assigned zone")
+    
+    customer_location = order.get("customer_location")
+    distance_km = None
+    eta_minutes = None
+    
+    if customer_location and current_location:
+        distance_km = round(haversine_distance(current_location, customer_location), 2)
+        # Estimate ETA: assume average speed of 20 km/h in city traffic
+        eta_minutes = round((distance_km / 20) * 60)
+    
+    return {
+        "order_id": order_id,
+        "customer_name": order.get("customer_name"),
+        "customer_address": order.get("customer_address"),
+        "customer_mobile": order.get("customer_mobile"),
+        "customer_location": customer_location,  # [lng, lat] for Google Maps
+        "current_location": current_location,
+        "distance_km": distance_km,
+        "eta_minutes": eta_minutes,
+        "status": order.get("status"),
+        "combo_name": order.get("combo_name"),
+        "meal_type": order.get("meal_type")
+    }
+
+@api_router.get("/delivery-boy/next-order")
+async def get_next_nearest_order(
+    current_location: List[float] = Query(..., description="[longitude, latitude] - delivery boy's current location"),
+    meal_type: Optional[str] = Query(None, enum=["breakfast", "lunch", "dinner"]),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get the next nearest pending order based on delivery boy's current location.
+    Called after marking an order as delivered.
+    """
+    if current_user.get("role") != "delivery_boy":
+        raise HTTPException(status_code=403, detail="Delivery boy access only")
+    
+    assigned_zones = current_user.get("assigned_zones", [])
+    if not assigned_zones:
+        return {"message": "No assigned zones", "next_order": None}
+    
+    # Query for pending/packed orders (not yet out for delivery or delivered)
+    query = {
+        "zone_id": {"$in": assigned_zones},
+        "order_date": get_today_date(),
+        "status": {"$in": ["pending", "packed"]},
+        "customer_location": {"$ne": None}  # Only orders with location
+    }
+    
+    if meal_type:
+        query["meal_type"] = meal_type
+    
+    orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    
+    if not orders:
+        return {"message": "No pending orders", "next_order": None}
+    
+    # Calculate distance for each order and find the nearest
+    nearest_order = None
+    min_distance = float('inf')
+    
+    for order in orders:
+        customer_location = order.get("customer_location")
+        if customer_location:
+            distance = haversine_distance(current_location, customer_location)
+            if distance < min_distance:
+                min_distance = distance
+                nearest_order = order
+    
+    if not nearest_order:
+        return {"message": "No orders with valid location", "next_order": None}
+    
+    eta_minutes = round((min_distance / 20) * 60)  # 20 km/h average
+    
+    return {
+        "message": "Next nearest order found",
+        "next_order": {
+            "id": nearest_order["id"],
+            "customer_name": nearest_order.get("customer_name"),
+            "customer_address": nearest_order.get("customer_address"),
+            "customer_mobile": nearest_order.get("customer_mobile"),
+            "customer_location": nearest_order.get("customer_location"),
+            "zone_name": nearest_order.get("zone_name"),
+            "combo_name": nearest_order.get("combo_name"),
+            "meal_type": nearest_order.get("meal_type"),
+            "status": nearest_order.get("status"),
+            "distance_km": round(min_distance, 2),
+            "eta_minutes": eta_minutes
+        }
+    }
+
+@api_router.put("/delivery-boy/location")
+async def update_delivery_boy_location(
+    location: List[float] = Query(..., description="[longitude, latitude]"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update delivery boy's current location.
+    Can be used for real-time tracking.
+    """
+    if current_user.get("role") != "delivery_boy":
+        raise HTTPException(status_code=403, detail="Delivery boy access only")
+    
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {
+            "current_location": location,
+            "location_updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Location updated", "location": location}
+
 @api_router.get("/delivery-boy/settings")
 async def get_delivery_boy_app_settings():
     """Get app settings for delivery boy (help number)"""
