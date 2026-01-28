@@ -792,18 +792,11 @@ async def create_customer(customer: CustomerCreate, admin: dict = Depends(requir
     customer_uuid = str(uuid.uuid4())
     customer_id = await generate_customer_id()
     
-    # Find zone based on location
+    # Find zone based on location using our helper function
     zone_id = None
     zone_name = None
     if customer.location:
-        zone = await db.zones.find_one({
-            "is_active": True,
-            "polygon": {
-                "$geoIntersects": {
-                    "$geometry": {"type": "Point", "coordinates": customer.location}
-                }
-            }
-        }, {"_id": 0})
+        zone = await find_zone_for_location(customer.location)
         if zone:
             zone_id = zone["id"]
             zone_name = zone["name"]
