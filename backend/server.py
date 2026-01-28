@@ -1623,7 +1623,7 @@ async def get_delivery_boy_orders(
     status: Optional[str] = Query(None, enum=["pending", "packed", "out_for_delivery", "delivered"]),
     current_user: dict = Depends(get_current_user)
 ):
-    """Get orders for delivery boy's assigned zones"""
+    """Get orders for delivery boy's assigned zones with location data for routing"""
     if current_user.get("role") != "delivery_boy":
         raise HTTPException(status_code=403, detail="Delivery boy access only")
     
@@ -1645,7 +1645,7 @@ async def get_delivery_boy_orders(
     
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
-    # Return only necessary fields (no price/combo modification data)
+    # Return fields including customer_location for Google Maps routing
     result = []
     for order in orders:
         result.append({
@@ -1653,6 +1653,7 @@ async def get_delivery_boy_orders(
             "customer_name": order.get("customer_name"),
             "customer_address": order.get("customer_address"),
             "customer_mobile": order.get("customer_mobile"),
+            "customer_location": order.get("customer_location"),  # [lng, lat] for routing
             "zone_name": order.get("zone_name"),
             "combo_name": order.get("combo_name"),
             "meal_type": order.get("meal_type"),
