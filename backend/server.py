@@ -273,9 +273,18 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
+        role = payload.get("role")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        
+        # Look in appropriate collection based on role
+        if role == "customer":
+            user = await db.customers.find_one({"id": user_id}, {"_id": 0})
+            if user:
+                user["role"] = "customer"
+        else:
+            user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
         return user
