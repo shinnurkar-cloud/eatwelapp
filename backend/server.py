@@ -46,11 +46,17 @@ cloudinary.config(
 # Security
 security = HTTPBearer()
 
+# Timezone for India (IST)
+IST = pytz.timezone('Asia/Kolkata')
+
 # Create the main app
-app = FastAPI(title="ZoneBite - Subscription Meal Delivery Admin API")
+app = FastAPI(title="EATWEL - Subscription Meal Delivery API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+# APScheduler for automatic order generation
+scheduler = AsyncIOScheduler(timezone=IST)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
