@@ -1018,6 +1018,7 @@ async def generate_orders(meal_type: str = Query(..., enum=["breakfast", "lunch"
             "customer_name": customer["name"],
             "customer_address": customer["address"],
             "customer_mobile": customer["mobile"],
+            "customer_location": customer.get("location"),  # [lng, lat] for routing
             "zone_id": customer.get("zone_id"),
             "zone_name": zone["name"] if zone else None,
             "combo_id": plan["combo_id"],
