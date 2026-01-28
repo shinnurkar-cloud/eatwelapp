@@ -1421,6 +1421,144 @@ async def get_customer_app_settings():
         "help_number": settings.get("help_number", "") if settings else ""
     }
 
+# ===================== CUSTOMER LOCATION APIs (for Mobile App) =====================
+
+@api_router.post("/customer/register")
+async def customer_register(data: CustomerRegister):
+    """Customer self-registration with Name and Mobile"""
+    # Check if mobile already exists
+    existing = await db.customers.find_one({"mobile": data.mobile})
+    if existing:
+        raise HTTPException(status_code=400, detail="Mobile number already registered")
+    
+    customer_uuid = str(uuid.uuid4())
+    customer_id = await generate_customer_id()
+    
+    customer_doc = {
+        "id": customer_uuid,
+        "customer_id": customer_id,
+        "name": data.name,
+        "mobile": data.mobile,
+        "password_hash": hash_password(data.password),
+        "address": "",
+        "location": None,
+        "zone_id": None,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.customers.insert_one(customer_doc)
+    
+    token = create_token(customer_uuid, customer_id, "customer")
+    
+    return {
+        "message": "Registration successful",
+        "access_token": token,
+        "token_type": "bearer",
+        "customer": {
+            "id": customer_uuid,
+            "customer_id": customer_id,
+            "name": data.name,
+            "mobile": data.mobile,
+            "address": "",
+            "location": None,
+            "zone_id": None,
+            "zone_name": None,
+            "is_active": True,
+            "created_at": customer_doc["created_at"]
+        }
+    }
+
+@api_router.post("/customer/check-zone")
+async def check_zone_availability(location: List[float] = Query(..., description="[longitude, latitude]")):
+    """
+    Check if a location is within any delivery zone.
+    Used by mobile app when customer drags & drops pin.
+    Returns zone info if available, or 'Service not available' if outside all zones.
+    """
+    zone = await find_zone_for_location(location)
+    
+    if zone:
+        return {
+            "available": True,
+            "zone_id": zone["id"],
+            "zone_name": zone["name"],
+            "message": f"Delivery available in {zone['name']}"
+        }
+    else:
+        return {
+            "available": False,
+            "zone_id": None,
+            "zone_name": None,
+            "message": "Service not available in this area"
+        }
+
+@api_router.put("/customer/location")
+async def update_customer_location(
+    update: CustomerLocationUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update customer's delivery location (drag & drop pin).
+    Automatically determines zone based on location.
+    """
+    # Find zone for the new location
+    zone = await find_zone_for_location(update.location)
+    
+    if not zone:
+        raise HTTPException(
+            status_code=400,
+            detail="Service not available in this area. Please select a location within our delivery zones."
+        )
+    
+    update_doc = {
+        "location": update.location,
+        "zone_id": zone["id"]
+    }
+    
+    if update.address:
+        update_doc["address"] = update.address
+    
+    result = await db.customers.find_one_and_update(
+        {"id": current_user.get("id")},
+        {"$set": update_doc},
+        return_document=True
+    )
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    return {
+        "message": "Location updated successfully",
+        "location": update.location,
+        "zone_id": zone["id"],
+        "zone_name": zone["name"],
+        "address": result.get("address", "")
+    }
+
+@api_router.get("/customer/zones")
+async def get_all_delivery_zones():
+    """
+    Get all active delivery zones with their polygon boundaries.
+    Used by mobile app to show delivery areas on map.
+    """
+    zones = await db.zones.find({"is_active": True}, {"_id": 0}).to_list(100)
+    
+    result = []
+    for zone in zones:
+        polygon_data = zone.get("polygon", {})
+        if isinstance(polygon_data, dict) and "coordinates" in polygon_data:
+            polygon = polygon_data["coordinates"][0]
+        else:
+            polygon = polygon_data if polygon_data else []
+        
+        result.append({
+            "id": zone["id"],
+            "name": zone["name"],
+            "polygon": polygon  # [[lng, lat], ...] for Google Maps
+        })
+    
+    return result
+
 # ===================== DELIVERY BOY APP APIs =====================
 
 @api_router.post("/delivery-boy/login")
