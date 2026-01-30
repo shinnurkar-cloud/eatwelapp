@@ -177,9 +177,9 @@ const Login = () => {
             </CardContent>
           </Card>
 
-          {/* Demo credentials */}
-          <p className="text-center text-xs text-white/70 mt-6 font-mono animate-fade-in" style={{ animationDelay: "0.2s" }}>
-            Default: admin / admin123
+          {/* Powered by */}
+          <p className="text-center text-sm text-white/80 mt-6 font-medium animate-fade-in" style={{ animationDelay: "0.2s" }}>
+            Powered by <span className="font-bold">Shinnurkar</span>
           </p>
 
           {/* Mobile Lord Image */}
