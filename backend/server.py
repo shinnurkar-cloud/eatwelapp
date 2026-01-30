@@ -1652,21 +1652,26 @@ async def get_delivery_boy_orders(
     
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
-    # Return fields including customer_location for Google Maps routing
+    # Return fields - customer_mobile only visible when status is out_for_delivery or delivered
     result = []
     for order in orders:
+        order_status = order.get("status")
+        # Only show customer mobile when order is out_for_delivery or delivered
+        show_mobile = order_status in ["out_for_delivery", "delivered"]
+        
         result.append({
             "id": order["id"],
             "customer_name": order.get("customer_name"),
             "customer_address": order.get("customer_address"),
-            "customer_mobile": order.get("customer_mobile"),
-            "customer_location": order.get("customer_location"),  # [lng, lat] for routing
+            "customer_mobile": order.get("customer_mobile") if show_mobile else None,
+            "customer_location": order.get("customer_location") if show_mobile else None,
             "zone_name": order.get("zone_name"),
             "combo_name": order.get("combo_name"),
             "meal_type": order.get("meal_type"),
-            "status": order.get("status"),
+            "status": order_status,
             "order_date": order.get("order_date"),
-            "created_at": order.get("created_at")
+            "created_at": order.get("created_at"),
+            "mobile_hidden": not show_mobile  # Flag to indicate mobile is hidden
         })
     
     return result
