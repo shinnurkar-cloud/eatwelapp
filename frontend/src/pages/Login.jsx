@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -6,14 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, MessageCircle } from "lucide-react";
+import axios from "axios";
 
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_5b457f8b-21e9-4fcb-ab01-881f7858e8c3/artifacts/cjqtf2uz_Gemini_Generated_Image_yx04ezyx04ezyx04-removebg-preview%20%281%29.png";
 const LORD_IMAGE_URL = "https://customer-assets.emergentagent.com/job_5b457f8b-21e9-4fcb-ab01-881f7858e8c3/artifacts/dlbfx1dt_download.jpg";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [helpNumber, setHelpNumber] = useState("");
   const [formData, setFormData] = useState({
     loginId: "",
     password: "",
@@ -21,6 +24,19 @@ const Login = () => {
   
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Fetch help number for WhatsApp support
+    const fetchHelpNumber = async () => {
+      try {
+        const response = await axios.get(`${API}/customer/settings`);
+        setHelpNumber(response.data.help_number || "");
+      } catch (error) {
+        console.error("Error fetching help number:", error);
+      }
+    };
+    fetchHelpNumber();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,6 +56,17 @@ const Login = () => {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const openWhatsApp = () => {
+    if (helpNumber) {
+      // Remove any non-numeric characters except +
+      const cleanNumber = helpNumber.replace(/[^\d+]/g, "");
+      const message = encodeURIComponent("Hi, I need help with my EATWEL login.");
+      window.open(`https://wa.me/${cleanNumber}?text=${message}`, "_blank");
+    } else {
+      toast.error("Help number not configured");
+    }
   };
 
   return (
@@ -147,6 +174,23 @@ const Login = () => {
                   )}
                 </Button>
               </form>
+
+              {/* WhatsApp Support Button */}
+              <div className="mt-4 pt-4 border-t border-orange-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="whatsapp-support-btn"
+                  onClick={openWhatsApp}
+                  className="w-full h-10 font-medium border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  WhatsApp Support for Login Issues
+                </Button>
+                <p className="text-center text-xs text-orange-600/70 mt-2">
+                  Having trouble logging in? Contact us on WhatsApp
+                </p>
+              </div>
             </CardContent>
           </Card>
 
