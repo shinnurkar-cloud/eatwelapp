@@ -1562,10 +1562,15 @@ async def get_customer_app_settings():
 
 @api_router.post("/customer/register")
 async def customer_register(data: CustomerRegister):
-    """Customer self-registration with Name and Mobile"""
-    # Check if mobile already exists
-    existing = await db.customers.find_one({"mobile": data.mobile})
+    """Customer self-registration with Login ID and Password"""
+    # Check if login_id already exists
+    existing = await db.customers.find_one({"login_id": data.login_id})
     if existing:
+        raise HTTPException(status_code=400, detail="Login ID already exists")
+    
+    # Check if mobile already exists
+    existing_mobile = await db.customers.find_one({"mobile": data.mobile})
+    if existing_mobile:
         raise HTTPException(status_code=400, detail="Mobile number already registered")
     
     customer_uuid = str(uuid.uuid4())
@@ -1574,6 +1579,7 @@ async def customer_register(data: CustomerRegister):
     customer_doc = {
         "id": customer_uuid,
         "customer_id": customer_id,
+        "login_id": data.login_id,
         "name": data.name,
         "mobile": data.mobile,
         "password_hash": hash_password(data.password),
@@ -1585,7 +1591,7 @@ async def customer_register(data: CustomerRegister):
     }
     await db.customers.insert_one(customer_doc)
     
-    token = create_token(customer_uuid, customer_id, "customer")
+    token = create_token(customer_uuid, data.login_id, "customer")
     
     return {
         "message": "Registration successful",
@@ -1594,6 +1600,7 @@ async def customer_register(data: CustomerRegister):
         "customer": {
             "id": customer_uuid,
             "customer_id": customer_id,
+            "login_id": data.login_id,
             "name": data.name,
             "mobile": data.mobile,
             "address": "",
