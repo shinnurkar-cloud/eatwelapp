@@ -135,6 +135,7 @@ class ZoneResponse(ZoneCreate):
 class CustomerCreate(BaseModel):
     name: str
     mobile: str
+    login_id: str
     password: str
     address: str
     location: Optional[List[float]] = None  # [lng, lat]
@@ -142,6 +143,7 @@ class CustomerCreate(BaseModel):
 class CustomerResponse(BaseModel):
     id: str
     customer_id: str  # System generated ID like CUS001
+    login_id: str
     name: str
     mobile: str
     address: str
@@ -158,7 +160,18 @@ class CustomerLocationUpdate(BaseModel):
 class CustomerRegister(BaseModel):
     name: str
     mobile: str
+    login_id: str
     password: str
+
+class CustomerLogin(BaseModel):
+    login_id: str
+    password: str
+
+class CustomerChangePassword(BaseModel):
+    current_password: Optional[str] = None
+    master_password: Optional[str] = None
+    new_password: str
+    confirm_password: str
 
 # Subscription Models
 class SubscriptionCreate(BaseModel):
