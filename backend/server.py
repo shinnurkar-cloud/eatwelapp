@@ -1759,6 +1759,7 @@ async def get_order_route_data(
     Get route data for a specific order.
     Returns customer location, distance, and ETA estimate.
     Mobile app uses this to show route on Google Maps.
+    Note: Customer mobile/location only available when order is out_for_delivery or delivered.
     """
     if current_user.get("role") != "delivery_boy":
         raise HTTPException(status_code=403, detail="Delivery boy access only")
@@ -1771,6 +1772,15 @@ async def get_order_route_data(
     
     if order.get("zone_id") not in assigned_zones:
         raise HTTPException(status_code=403, detail="Order not in your assigned zone")
+    
+    order_status = order.get("status")
+    
+    # Only show customer mobile/location when order is out_for_delivery or delivered
+    if order_status not in ["out_for_delivery", "delivered"]:
+        raise HTTPException(
+            status_code=403, 
+            detail="Route data available only after marking order as 'Out for Delivery'"
+        )
     
     customer_location = order.get("customer_location")
     distance_km = None
@@ -1790,7 +1800,7 @@ async def get_order_route_data(
         "current_location": current_location,
         "distance_km": distance_km,
         "eta_minutes": eta_minutes,
-        "status": order.get("status"),
+        "status": order_status,
         "combo_name": order.get("combo_name"),
         "meal_type": order.get("meal_type")
     }
