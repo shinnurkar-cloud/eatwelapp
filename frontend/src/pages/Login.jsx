@@ -174,23 +174,6 @@ const Login = () => {
                   )}
                 </Button>
               </form>
-
-              {/* WhatsApp Support Button */}
-              <div className="mt-4 pt-4 border-t border-orange-200">
-                <Button
-                  type="button"
-                  variant="outline"
-                  data-testid="whatsapp-support-btn"
-                  onClick={openWhatsApp}
-                  className="w-full h-10 font-medium border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  WhatsApp Support for Login Issues
-                </Button>
-                <p className="text-center text-xs text-orange-600/70 mt-2">
-                  Having trouble logging in? Contact us on WhatsApp
-                </p>
-              </div>
             </CardContent>
           </Card>
 
