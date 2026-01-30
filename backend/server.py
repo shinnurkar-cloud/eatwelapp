@@ -498,6 +498,73 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         created_at=current_user["created_at"]
     )
 
+# Master password for admin password reset
+MASTER_PASSWORD = "Shin9111"
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+class MasterResetPasswordRequest(BaseModel):
+    master_password: str
+    new_password: str
+    confirm_password: str
+
+@api_router.post("/auth/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Change password for logged in user (admin or delivery boy)"""
+    if request.new_password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="New passwords do not match")
+    
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Verify current password
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not verify_password(request.current_password, user.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"password_hash": hash_password(request.new_password)}}
+    )
+    
+    return {"message": "Password changed successfully"}
+
+@api_router.post("/auth/master-reset-password")
+async def master_reset_password(
+    request: MasterResetPasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Reset admin password using master password (for admin only)"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access only")
+    
+    if request.master_password != MASTER_PASSWORD:
+        raise HTTPException(status_code=400, detail="Invalid master password")
+    
+    if request.new_password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="New passwords do not match")
+    
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Update password
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"password_hash": hash_password(request.new_password)}}
+    )
+    
+    return {"message": "Password reset successfully using master password"}
+
 # ===================== DELIVERY BOY MANAGEMENT =====================
 
 @api_router.post("/delivery-boys", response_model=UserResponse)
