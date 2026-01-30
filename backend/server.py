@@ -1349,9 +1349,8 @@ async def delete_banner(banner_id: str, admin: dict = Depends(require_admin)):
 
 # ===================== CUSTOMER APP APIs =====================
 
-class CustomerLogin(BaseModel):
-    customer_id: str
-    password: str
+# Customer master password for password reset
+CUSTOMER_MASTER_PASSWORD = "Eatwel9111"
 
 class CustomerProfileUpdate(BaseModel):
     name: Optional[str] = None
@@ -1361,6 +1360,7 @@ class CustomerProfileUpdate(BaseModel):
 class CustomerProfileResponse(BaseModel):
     id: str
     customer_id: str
+    login_id: str
     name: str
     mobile: str
     address: str
@@ -1372,15 +1372,20 @@ class CustomerProfileResponse(BaseModel):
 
 @api_router.post("/customer/login")
 async def customer_login(credentials: CustomerLogin):
-    """Customer login with Customer ID and Password"""
-    customer = await db.customers.find_one({"customer_id": credentials.customer_id}, {"_id": 0})
+    """Customer login with Login ID and Password"""
+    # Try login_id first, then fallback to customer_id for backward compatibility
+    customer = await db.customers.find_one({"login_id": credentials.login_id}, {"_id": 0})
+    if not customer:
+        # Fallback: try with customer_id for old customers
+        customer = await db.customers.find_one({"customer_id": credentials.login_id}, {"_id": 0})
+    
     if not customer or not verify_password(credentials.password, customer.get("password_hash", "")):
-        raise HTTPException(status_code=401, detail="Invalid Customer ID or Password")
+        raise HTTPException(status_code=401, detail="Invalid Login ID or Password")
     
     if not customer.get("is_active", True):
         raise HTTPException(status_code=401, detail="Account is deactivated")
     
-    token = create_token(customer["id"], credentials.customer_id, "customer")
+    token = create_token(customer["id"], customer.get("login_id", customer["customer_id"]), "customer")
     
     # Get zone name
     zone_name = None
@@ -1394,15 +1399,53 @@ async def customer_login(credentials: CustomerLogin):
         "customer": {
             "id": customer["id"],
             "customer_id": customer["customer_id"],
+            "login_id": customer.get("login_id", customer["customer_id"]),
             "name": customer["name"],
             "mobile": customer["mobile"],
-            "address": customer["address"],
+            "address": customer.get("address", ""),
             "zone_id": customer.get("zone_id"),
             "zone_name": zone_name,
             "is_active": customer.get("is_active", True),
             "created_at": customer["created_at"]
         }
     }
+
+@api_router.post("/customer/change-password")
+async def customer_change_password(
+    request: CustomerChangePassword,
+    current_user: dict = Depends(get_current_user)
+):
+    """Change customer password using current password or master password"""
+    if current_user.get("role") != "customer":
+        raise HTTPException(status_code=403, detail="Customer access only")
+    
+    if request.new_password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="New passwords do not match")
+    
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    customer = await db.customers.find_one({"id": current_user["id"]}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Verify either current password or master password
+    if request.master_password:
+        if request.master_password != CUSTOMER_MASTER_PASSWORD:
+            raise HTTPException(status_code=400, detail="Invalid master password")
+    elif request.current_password:
+        if not verify_password(request.current_password, customer.get("password_hash", "")):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+    else:
+        raise HTTPException(status_code=400, detail="Either current password or master password is required")
+    
+    # Update password
+    await db.customers.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"password_hash": hash_password(request.new_password)}}
+    )
+    
+    return {"message": "Password changed successfully"}
 
 @api_router.get("/customer/profile", response_model=CustomerProfileResponse)
 async def get_customer_profile(current_user: dict = Depends(get_current_user)):
