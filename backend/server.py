@@ -1490,9 +1490,10 @@ async def get_customer_profile(current_user: dict = Depends(get_current_user)):
     return CustomerProfileResponse(
         id=customer["id"],
         customer_id=customer["customer_id"],
+        login_id=customer.get("login_id", customer["customer_id"]),
         name=customer["name"],
         mobile=customer["mobile"],
-        address=customer["address"],
+        address=customer.get("address", ""),
         zone_id=customer.get("zone_id"),
         zone_name=zone_name,
         is_active=customer.get("is_active", True),
