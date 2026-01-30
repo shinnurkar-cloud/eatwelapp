@@ -869,6 +869,11 @@ async def delete_zone(zone_id: str, admin: dict = Depends(require_admin)):
 
 @api_router.post("/customers", response_model=CustomerResponse)
 async def create_customer(customer: CustomerCreate, admin: dict = Depends(require_admin)):
+    # Check if login_id already exists
+    existing = await db.customers.find_one({"login_id": customer.login_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Login ID already exists")
+    
     customer_uuid = str(uuid.uuid4())
     customer_id = await generate_customer_id()
     
@@ -884,6 +889,7 @@ async def create_customer(customer: CustomerCreate, admin: dict = Depends(requir
     customer_doc = {
         "id": customer_uuid,
         "customer_id": customer_id,
+        "login_id": customer.login_id,
         "name": customer.name,
         "mobile": customer.mobile,
         "password_hash": hash_password(customer.password),
@@ -898,6 +904,7 @@ async def create_customer(customer: CustomerCreate, admin: dict = Depends(requir
     return CustomerResponse(
         id=customer_uuid,
         customer_id=customer_id,
+        login_id=customer.login_id,
         name=customer.name,
         mobile=customer.mobile,
         address=customer.address,
@@ -922,17 +929,16 @@ async def get_customers(admin: dict = Depends(require_admin)):
         result.append(CustomerResponse(
             id=c["id"],
             customer_id=c["customer_id"],
+            login_id=c.get("login_id", c["customer_id"]),  # Fallback for old customers
             name=c["name"],
             mobile=c["mobile"],
-            address=c["address"],
+            address=c.get("address", ""),
             location=c.get("location"),
             zone_id=c.get("zone_id"),
             zone_name=zone_name,
             is_active=c.get("is_active", True),
             created_at=c["created_at"]
         ))
-    
-    return result
     
     return result
 
