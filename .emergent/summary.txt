@@ -1,52 +1,51 @@
 <analysis>**original_problem_statement:**
-The user initially requested a food delivery app with Google Maps integration for geo-fencing, an admin web login, and mobile apps for the delivery boy and user.
+The user requested a subscription-based food delivery application named EATWEL. The project consists of three main components: an Admin Web Panel, a Customer Mobile App, and a Delivery Boy Mobile App.
 
-This was later refined into a more detailed set of requirements for a subscription-based meal delivery application named EATWEL.
-
-**PRODUCT REQUIREMENTS (from user message #62):**
+**PRODUCT REQUIREMENTS:**
 *   **App Type**: Subscription-based food delivery for a single restaurant/cloud kitchen.
-*   **Components**: Admin Web Panel, Customer Mobile App, Delivery Boy Mobile App.
-*   **User Roles**: Admin, Customer, Delivery Boy with separate logins.
+*   **User Roles**: Admin, Customer, and Delivery Boy with separate, distinct login flows.
 *   **Authentication**:
-    *   Admin/Delivery Boy: ID + Password.
-    *   Customer: Register with Name/Mobile, login with system-generated ID + Password.
-*   **Admin Panel (Web)**: Manage Delivery Boys, Combos (dish groups), Subscription Plans (with daily meal selection), Zones (via Google Maps), and view orders. It should also have a dashboard with key metrics.
-*   **Core Logic**: An Order Generation Engine that automatically creates orders based on active subscriptions, meal times (Breakfast, Lunch, Dinner), and zones. Admin can override timings.
-*   **Customer App**: Register/Login, view/buy plans, track order status, pause/resume subscriptions, and access a help number. Add auto-sliding banners (uploaded by admin) and a customer profile section.
-*   **Delivery Boy App**: Login, view orders in assigned zones by meal, and update order status (Out for Delivery, Delivered).
-*   **Payment**: Online payment gateway integration is required.
+    *   Admin/Delivery Boy: Login with an ID and Password set by the Admin.
+    *   Customer: Self-register with a custom Login ID, Name, Mobile, and Password.
+*   **Admin Panel (Web)**: Manage Delivery Boys, Combos (dish groups), Subscription Plans, Zones (via Google Maps polygon drawing), Orders, and promotional Banners. Includes a dashboard for key metrics and a settings page for app configuration.
+*   **Core Logic**: An Order Generation Engine automatically creates daily orders based on active subscriptions and meal timings (Breakfast, Lunch, Dinner).
+*   **Customer App**: Register/Login, view/buy plans, select delivery location via map, track order status, pause/resume subscriptions, and change password.
+*   **Delivery Boy App**: Login, view assigned orders, update order status (Out for Delivery, Delivered), and view customer route on a map. Features a privacy rule where customer contact details are hidden until an order is Out for Delivery.
+*   **Payment**: An online payment gateway integration is required but not yet implemented.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack web application for the EATWEL Admin Panel has been built using FastAPI, React, and MongoDB.
--   The backend provides a comprehensive API for managing the subscription meal service.
--   The frontend is a complete admin dashboard allowing management of delivery boys, combos, subscription plans, customers, zones (mocked map), orders, and promotional banners.
--   User authentication is handled via JWT.
--   Image uploads are integrated with Cloudinary.
--   The backend includes placeholder APIs to support the future Customer and Delivery Boy mobile apps.
+A full-stack application for the EATWEL Admin Panel has been built with a FastAPI backend and a React frontend. The backend provides a comprehensive set of APIs to support the admin panel and the future mobile apps. The frontend is a functional admin dashboard. Key features implemented include JWT authentication, an automatic order generation engine (APScheduler), Cloudinary integration (currently bugged), and Google Maps API for polygonal zone management. The currency has been set to Indian Rupees (₹).
 
 **Last working item**:
--   **Last item agent was working**: Adding backend APIs to support the Delivery Boy mobile app. This includes endpoints for login, fetching assigned orders, and updating order status. The agent added the necessary code to .
+-   **Last item agent was working**: The user reported that uploaded images for Banners and Plans are not displayed. The agent investigated and confirmed that the frontend is incorrectly saving images as base64 data URLs directly into the database, instead of uploading them to Cloudinary and storing the resulting URL. The agent was about to fix this frontend logic.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: backend testing agent
+-   **Which testing method agent to use?**: frontend testing agent
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Verify Delivery Boy Backend APIs (P0)**
-    -   **Description**: The agent added backend endpoints for the delivery boy mobile app but did not test or verify them. The app's functionality depends on these APIs working correctly.
-    -   **Attempted fixes**: Code was added to  to create the routes: , , and .
+-   **Issue 1: Images are saved as Base64 instead of being uploaded to Cloudinary (P0)**
+    -   **Description**: The frontend file upload mechanism for Banners and Plans bypasses the Cloudinary integration. It converts images to base64 strings and saves them in MongoDB, causing images to be broken in the UI.
+    -   **Attempted fixes**: The agent has only diagnosed the issue by inspecting the database content. No code fix has been implemented yet.
     -   **Next debug checklist**:
-        1.  Restart the backend server to ensure all changes are loaded.
-        2.  Create a test delivery boy account via the admin panel or directly in the database.
-        3.  Use  to test the  endpoint with the new credentials.
-        4.  Use the obtained token to test  to ensure it fetches orders correctly based on the assigned zone.
-        5.  Use the token to test the order status update endpoint .
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a mandatory prerequisite before the user can proceed with building the Delivery Boy native mobile app using the Mobile Agent.
+        1.  Review the file upload handling logic in  and .
+        2.  Modify the logic to first call the backend's  endpoint.
+        3.  Use the returned signature to upload the image file directly to Cloudinary's API.
+        4.  Capture the  from the Cloudinary response.
+        5.  Save this  in the form's state and submit it to the backend.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical bug preventing the admin from managing visual content. Fixing it will make image uploads for plans and banners functional.
     -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: backend
+    -   **Should Test frontend/backend/both after fix?**: frontend
+    -   **Blocked on other issue**: None
+
+-   **Issue 2: Minor Form Validation Styling (P2)**
+    -   **Description**: A previous test report noted that form validation error messages could be more prominent to improve UX.
+    -   **Status**: NOT STARTED
+    -   **Is recurring issue?**: N
+    -   **Should Test frontend/backend/both after fix?**: frontend
     -   **Blocked on other issue**: None
 
 **In progress Task List**:
@@ -54,33 +53,29 @@ None.
 
 **Upcoming and Future Tasks**
 *   **Upcoming Tasks**:
-    *   **Implement Automatic Order Generation Engine (P0)**: A core requirement is the automatic generation of orders based on meal timings (Breakfast: 3:00 AM, Lunch: 9:10 AM, etc.). This needs to be implemented as a scheduled background task on the backend.
-    *   **Integrate Real Google Maps API (P1)**: Replace the mocked map interface in the Zones management page with a functional Google Maps integration, allowing admins to draw and save geo-fenced delivery zones. This requires a Google Maps API key from the user.
-    *   **Integrate Payment Gateway (P1)**: The user requires online payments for subscriptions. This involves integrating a payment gateway like Stripe.
+    *   **Integrate Payment Gateway (P1)**: Implement a payment gateway (e.g., Stripe) to handle subscription payments.
 
 *   **Future Tasks**:
-    *   **Build Native Mobile Apps**: The user intends to use the **Mobile Agent** to build the native Customer and Delivery Boy apps. The current agent's work on the backend is to support this.
+    *   **Build Native Mobile Apps**: Use the Mobile Agent to build the Customer and Delivery Boy apps. A detailed prompt with all API endpoints and requirements has already been generated.
+    *   **Push Notifications**: For real-time order status updates.
+    - **Real-time Order Tracking**: For customers to see the delivery boy's location on a map.
 
 **Completed work in this session**
--   **EATWEL Admin Panel (v2.0)**: A complete rebuild from the initial concept to a subscription-based meal delivery service admin panel.
--   **Backend API**: Created a comprehensive FastAPI backend with endpoints for managing all aspects of the service.
-    -   File: 
--   **Frontend Dashboard**: Developed a full-featured React admin dashboard.
-    -   Files: , , and pages in  for Dashboard, DeliveryBoys, Combos, Plans, Zones, Orders, Customers, Subscriptions, Settings, and Banners.
--   **Branding and Theming**: Rebranded the entire application to EATWEL with a custom orange theme and specific imagery on the login page as requested by the user.
-    -   Files: , .
--   **Cloudinary Integration**: Integrated Cloudinary for handling image uploads for subscription plans and banners.
--   **Mobile App Backend Support**: Added specific API endpoints to support the future Customer and Delivery Boy mobile apps.
+-   **Mobile App Backend Completion**: Enhanced the backend with a full suite of APIs for the mobile apps, including:
+    -   Automatic Order Generation engine using APScheduler.
+    -   Geo-fencing APIs with polygon zone validation.
+    -   Delivery Boy APIs with route data, next-order suggestions, and a privacy feature to hide customer contact details until an order is marked Out for Delivery.
+-   **Google Maps Integration**: Replaced the mocked map in the Admin Panel with a functional Google Maps interface () for drawing and managing delivery zones.
+-   **Enhanced Authentication**:
+    -   Implemented Change Password and master password reset ( for Admin,  for Customer).
+    -   Reworked customer auth to use a custom Login ID and Password system.
+-   **UI & Branding Updates**:
+    -   Changed all currency symbols to Indian Rupee (₹).
+    -   Replaced admin credentials on the login page with a Powered by Shinnurkar message.
+-   **Provided Mobile Agent Prompt**: Generated a comprehensive prompt with detailed requirements and API endpoints for building the native mobile apps.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: Minor Form Validation Styling**
-    -   **Description**: During testing of v2.0, the testing agent noted that The form validation styling is present but could be more prominent to improve user experience. This was deemed a minor, non-blocking issue.
-    -   **Debug checklist**:
-        1.  Review the form components in files like , , etc.
-        2.  Enhance the CSS classes for validation error messages (e.g., make text color brighter red, add a border to invalid fields).
-    -   **Why to solve this issue and what will be achieved with this?**: Improves UI/UX by making form errors more noticeable to the admin.
-    -   **Should Test frontend/backend/both after fix**: frontend
-    -   **Is recurring issue?**: N
+-   The minor form validation styling issue is the only one outstanding from previous reports.
 
 **Known issue recurrence from previous fork**
 None.
@@ -89,86 +84,76 @@ None.
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI
--   **Frontend**: React
--   **Database**: MongoDB
--   **Authentication**: JWT (JSON Web Tokens)
--   **Styling**: Tailwind CSS
--   **Image Storage**: Cloudinary API
+-   **Backend**: FastAPI, 
+-   **Frontend**: React, Tailwind CSS, 
+-   **Database**: MongoDB (using GeoJSON for locations/polygons)
+-   **Authentication**: JWT
+-   **Image Storage**: Cloudinary (buggy implementation)
 
 **key DB schema**
--   **users**: 
--   **delivery_boys**: 
--   **customers**: 
--   **combos**: 
--   **plans**: 
--   **subscriptions**: 
--   **orders**: 
--   **banners**: 
--   **zones**:  (Note: Geo-data is not yet stored)
+-   **customers**: Added , , and  (GeoJSON Point).
+-   **orders**: Added  (GeoJSON Point).
+-   **zones**: Added  (GeoJSON Polygon).
 
 **changes in tech stack**
--   **Cloudinary**: Added for cloud-based image storage.
+-   **Backend**: Added .
+-   **Frontend**: Added .
 
 **All files of reference**
--   : The single source for all backend logic, API routes, and Pydantic models.
--   : Contains the main application routing structure for the frontend.
--   : Themed login page.
--   : New page for managing promotional banners.
--   : Contains the detailed product requirements defined by the user.
--   : Test report for the v2.0 implementation.
+-   : Heavily modified with new APIs for scheduling, geo-fencing, and auth.
+-   : Overhauled with Google Maps integration.
+-   : Updated for password management.
+-   : UI text updated.
+-   , : These files contain the broken image upload logic that needs to be fixed.
+-   , : Updated with API keys.
 
-**Areas that need refactoring**
--    is monolithic and contains all models, routes, and business logic. It should be refactored by splitting the logic into multiple files using FastAPI's  for better maintainability. For example, have separate routers for , , , etc.
+**Areas that need refactoring**:
+-    is a large monolithic file and is a prime candidate for being split into multiple routers for better organization and maintainability.
 
 **key api endpoints**
--   **Admin**: , , , , ,  (CRUD for each)
--   **Customer (for mobile app)**: , , , 
--   **Delivery Boy (for mobile app)**: , , 
+-   **Auth**: , , , 
+-   **Geo-fencing**: , 
+-   **Delivery**: , 
+-   **Image Upload**: 
 
 **Critical Info for New Agent**
--   The project's direction pivoted significantly from a generic food app to a specific subscription-based meal service called EATWEL. The entire codebase was rewritten to match the new requirements in .
--   The user's primary goal now is to build native mobile apps for Customers and Delivery Boys using the **Mobile Agent**. Your task is to ensure the backend is fully prepared and tested to support this.
--   The Order Generation Engine is a critical, unimplemented feature. The user expects orders to be created automatically based on time schedules.
--   Google Maps and Payment Gateways are currently mocked/not implemented and are high-priority future tasks.
+-   The top priority is fixing the **Cloudinary image upload bug**. The frontend is saving base64 data, not URLs. The correct flow involves fetching a signature from the backend, uploading to Cloudinary, and saving the returned URL.
+-   The user's end goal is to build native mobile apps using the Mobile Agent. A detailed prompt for this has already been provided to the user. All backend work is intended to support this goal.
+-   Master passwords are in use:  for Admin,  for Customers.
 
 **documents and test reports created in this job**
--   
--   
--   
+-    (updated)
 -   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Asks for native mobile apps for Customer and Delivery Boy. (Pending)
-2.  **Agent**: Explains that this requires the Mobile Agent and a paid plan.
-3.  **User**: Adds requirements for the Customer App: auto-sliding banners and a customer profile. (Completed)
-4.  **Agent**: Agrees to add backend support for these features.
-5.  ... (Agent implements backend and frontend for banners) ...
-6.  **Agent**: Confirms the backend is ready to support the customer mobile app.
-7.  **User**: Provides requirements for the Delivery Boy mobile app. (In Progress)
-8.  **Agent**: Agrees to add the backend APIs for the Delivery Boy app.
-9.  ... (Agent adds code to server.py) ...
-10. **User**: credited - an ambiguous message, likely an typo or acknowledgement. It does not confirm the feature is working or complete.
+1.  **User**:  (after currency change)
+2.  **User**: Asks to use Cloudinary API.
+3.  **Agent**: Asks for Cloudinary credentials.
+4.  **User**: Provides credentials.
+5.  **Agent**: Configures keys and confirms the signature API works.
+6.  **User**: Reports that uploaded images are not visible in the app preview. (This is the current task).
+7.  **Agent**: Investigates and confirms the bug: images are saved as base64.
+8.  ... (Session ended here)
 
 **Project Health Check:**
--   **Broken**: Nothing is confirmed broken, but the newly added Delivery Boy APIs are untested.
--   **Mocked**:
-    -   Google Maps integration for Zone Management.
-    -   Payment gateway (functionality is not present).
+-   **Broken**: Image upload functionality. The frontend saves base64 data to MongoDB instead of uploading images to Cloudinary and saving the URL.
+-   **Mocked**: Payment Gateway.
 
 **3rd Party Integrations**
--   **Cloudinary**: Used for image uploads (plan images, banner images). Requires user-provided API keys, which have been configured.
+-   **Cloudinary**: Configured with user-provided keys, but the frontend implementation is bugged and does not use it correctly.
+-   **Google Maps**: Integrated into the frontend Admin Panel for zone management. The user's API key is configured.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES (after v1 and v2 builds)
+-   **Testing agent used after significant changes**: YES, a test report exists at .
 -   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: None. Testing was done via .
--   **Known regressions**: Minor form validation styling issue identified in .
+-   **Test files created**: None.
+-   **Known regressions**: The image upload functionality is not working as intended.
 
 **Credentials to test flow:**
 -   **Admin Login ID**: 
 -   **Admin Password**: 
+-   **Admin Master Password**: 
+-   **Customer Master Password**: 
 
 **What agent forgot to execute**
--   The agent forgot to test the newly added Delivery Boy API endpoints after implementation.
--   The agent has not yet implemented the **automatic order generation engine**, a core feature from the user's detailed requirements. It was mentioned as a future suggestion but was part of the original spec.</analysis>
+-   The agent correctly identified the root cause of the Cloudinary bug but was unable to implement the fix before the session ended. The next step is to modify the frontend code to use the correct Cloudinary upload workflow.</analysis>
