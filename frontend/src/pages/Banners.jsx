@@ -72,7 +72,7 @@ const Banners = () => {
       const signatureRes = await axios.get(`${API}/cloudinary/signature?folder=banners`);
       const { signature, timestamp, cloud_name, api_key, folder } = signatureRes.data;
 
-      // Step 2: Upload directly to Cloudinary
+      // Step 2: Upload directly to Cloudinary using fetch (to avoid axios Authorization header)
       const cloudinaryFormData = new FormData();
       cloudinaryFormData.append("file", file);
       cloudinaryFormData.append("signature", signature);
@@ -80,13 +80,22 @@ const Banners = () => {
       cloudinaryFormData.append("api_key", api_key);
       cloudinaryFormData.append("folder", folder);
 
-      const uploadRes = await axios.post(
+      const uploadRes = await fetch(
         `https://api.cloudinary.com/v1_1/${cloud_name}/image/upload`,
-        cloudinaryFormData
+        {
+          method: "POST",
+          body: cloudinaryFormData
+        }
       );
+      
+      if (!uploadRes.ok) {
+        throw new Error("Cloudinary upload failed");
+      }
+      
+      const uploadData = await uploadRes.json();
 
       // Step 3: Save the secure_url from Cloudinary response
-      setFormData({ ...formData, image_url: uploadRes.data.secure_url });
+      setFormData({ ...formData, image_url: uploadData.secure_url });
       toast.success("Image uploaded successfully");
     } catch (error) {
       console.error("Image upload error:", error);
