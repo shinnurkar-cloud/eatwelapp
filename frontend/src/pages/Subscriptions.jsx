@@ -335,7 +335,7 @@ const Subscriptions = () => {
                 <SelectContent>
                   {plans.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.name} - ${p.price} ({p.validity_days} days)
+                      {p.name} - ₹{p.price} ({p.validity_days} days)
                     </SelectItem>
                   ))}
                 </SelectContent>
