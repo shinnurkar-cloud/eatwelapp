@@ -68,16 +68,30 @@ const Banners = () => {
 
     setUploading(true);
     try {
-      // Create a data URL for preview (local only - use Cloudinary in production)
-      const reader = new FileReader();
-      reader.onload = () => {
-        setFormData({ ...formData, image_url: reader.result });
-        setUploading(false);
-      };
-      reader.readAsDataURL(file);
-      toast.success("Image uploaded (local preview)");
+      // Step 1: Get Cloudinary signature from backend
+      const signatureRes = await axios.get(`${API}/cloudinary/signature?folder=banners`);
+      const { signature, timestamp, cloud_name, api_key, folder } = signatureRes.data;
+
+      // Step 2: Upload directly to Cloudinary
+      const cloudinaryFormData = new FormData();
+      cloudinaryFormData.append("file", file);
+      cloudinaryFormData.append("signature", signature);
+      cloudinaryFormData.append("timestamp", timestamp);
+      cloudinaryFormData.append("api_key", api_key);
+      cloudinaryFormData.append("folder", folder);
+
+      const uploadRes = await axios.post(
+        `https://api.cloudinary.com/v1_1/${cloud_name}/image/upload`,
+        cloudinaryFormData
+      );
+
+      // Step 3: Save the secure_url from Cloudinary response
+      setFormData({ ...formData, image_url: uploadRes.data.secure_url });
+      toast.success("Image uploaded successfully");
     } catch (error) {
+      console.error("Image upload error:", error);
       toast.error("Failed to upload image");
+    } finally {
       setUploading(false);
     }
   };
