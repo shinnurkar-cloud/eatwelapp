@@ -288,7 +288,7 @@ const Plans = () => {
                 
                 <div className="flex items-center justify-between mt-3">
                   <div className="font-mono text-xl font-bold text-green-500">
-                    ${plan.price.toFixed(2)}
+                    ₹{plan.price.toFixed(0)}
                   </div>
                   <Badge variant="secondary">{plan.validity_days} days</Badge>
                 </div>
