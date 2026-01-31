@@ -374,11 +374,11 @@ const Plans = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="price">Price ($) *</Label>
+                <Label htmlFor="price">Price (₹) *</Label>
                 <Input
                   id="price"
                   type="number"
-                  step="0.01"
+                  step="1"
                   min="0"
                   data-testid="plan-price-input"
                   value={formData.price}
