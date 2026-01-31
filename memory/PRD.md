@@ -119,17 +119,17 @@ Build a subscription-based food delivery application for a single restaurant/clo
    - ETA estimation based on average city speed (20 km/h)
 
 ## What's MOCKED
-- **Payment Gateway** - Manual subscription activation
+- **Payment Gateway** - Razorpay test API integrated (manual activation still available)
 
 ## What's INTEGRATED ✅
 - **Google Maps API** - Real map with polygon drawing for zone management
   - Maps JavaScript API
   - Geocoding API
   - Directions API
-
-## What's READY for Integration
-- **Google Maps API** - Backend provides all coordinates and zone polygons
-- **Payment Gateway** - API structure ready, just needs Stripe integration
+- **Cloudinary** - Image upload for Banners and Plans
+  - Cloud Name: dbatnucbe
+  - Signed uploads with backend signature
+- **Razorpay** - Test API integrated
 
 ## Test Credentials
 - **Admin Login ID**: admin
@@ -174,3 +174,11 @@ Build a subscription-based food delivery application for a single restaurant/clo
 - ✅ Added distance/ETA calculation using Haversine formula
 - ✅ Fixed APScheduler async job execution
 - ✅ All APIs tested with 100% pass rate
+
+## Completed Work (January 31, 2026)
+- ✅ Fixed Cloudinary image upload bug in Banners.jsx and Plans.jsx
+  - Changed from base64 data URLs to proper Cloudinary uploads
+  - Uses fetch API instead of axios to avoid CORS issues with Authorization header
+  - Images now saved as Cloudinary URLs (https://res.cloudinary.com/dbatnucbe/...)
+- ✅ Updated Cloudinary cloud name to correct value (dbatnucbe)
+- ✅ Frontend testing passed 100%
