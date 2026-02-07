@@ -75,6 +75,7 @@ const Customers = () => {
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.customer_id.toLowerCase().includes(search.toLowerCase()) ||
+      c.login_id?.toLowerCase().includes(search.toLowerCase()) ||
       c.mobile.includes(search)
   );
 
