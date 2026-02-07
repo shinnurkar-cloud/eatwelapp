@@ -182,3 +182,8 @@ Build a subscription-based food delivery application for a single restaurant/clo
   - Images now saved as Cloudinary URLs (https://res.cloudinary.com/dbatnucbe/...)
 - ✅ Updated Cloudinary cloud name to correct value (dbatnucbe)
 - ✅ Frontend testing passed 100%
+
+## Completed Work (February 7, 2026)
+- ✅ Fixed Customer search filter to include login_id field
+- ✅ Added login_id badge display in customer cards for admin visibility
+- ✅ Verified customer registration API works with special characters (@)
