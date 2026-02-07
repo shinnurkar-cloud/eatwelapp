@@ -167,12 +167,17 @@ const Customers = () => {
                           </span>
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-medium">{customer.name}</p>
                             <Badge variant="outline" className="font-mono text-xs">
                               <Hash className="w-3 h-3 mr-1" />
                               {customer.customer_id}
                             </Badge>
+                            {customer.login_id && customer.login_id !== customer.customer_id && (
+                              <Badge variant="secondary" className="font-mono text-xs">
+                                @{customer.login_id.replace('@', '')}
+                              </Badge>
+                            )}
                           </div>
                           <Badge
                             variant="outline"
